@@ -1,0 +1,54 @@
+@startuml seq-01-consult-month
+title Sequence 1 – Consult events of a month and their spots (synchronous)
+
+skinparam shadowing false
+autonumber
+
+actor Student
+participant "Student\nConsumer" as C
+participant "Auth\nModule" as A
+participant "Event\nService" as ES
+participant "Persistence\nService" as P
+database "Database" as DB
+
+Student -> C : choose month (year, month)
+activate C
+C -> ES : listEventsByMonth(token, year, month)
+activate ES
+ES -> A : validateToken(token)
+activate A
+A --> ES : principal (studentId, role)
+deactivate A
+ES -> P : listEventDatesBetween(firstDay, lastDay)
+activate P
+P -> DB : SELECT event_date JOIN event LEFT JOIN place
+activate DB
+DB --> P : rows
+deactivate DB
+P --> ES : EventDate[] with Event, Place
+deactivate P
+ES -> ES : compute limit and available per date
+ES --> C : [name, date, spot, price,\nreservations, limit, available]
+deactivate ES
+C --> Student : show calendar of the month
+
+Student -> C : select event
+C -> ES : getEvent(token, eventId)
+activate ES
+ES -> A : validateToken(token)
+A --> ES : principal
+ES -> P : getEvent(eventId), listEventDates(eventId)
+activate P
+P --> ES : Event, EventDate[], Place
+deactivate P
+ES --> C : event with each date:\nreservations / limit / available
+deactivate ES
+C --> Student : show spots per date
+deactivate C
+
+note over C, P
+  Read-only: no requestId needed, safe to retry.
+  Target end-to-end time p95 < 1 s.
+end note
+
+@enduml

@@ -1,0 +1,111 @@
+@startuml components
+title UML Component Diagram – University Events Transaction System
+
+skinparam shadowing false
+skinparam componentStyle uml2
+
+package "1. Consumers" {
+  [Student Consumer] as StudentConsumer
+  [Admin Consumer] as AdminConsumer
+}
+
+package "2. Services" {
+  component "Auth Module" as Auth
+  interface IAuth
+
+  component "Student Service" as StudentService
+  interface IStudentService
+
+  component "Event Service" as EventService
+  interface IEventService
+
+  component "Transaction Service" as TransactionService
+  interface ITransactionService
+
+  component "Metrics Service" as MetricsService
+  interface IMetrics
+
+  component "Cancellation Queue" as CancellationQueue
+  interface IQueue
+
+  component "Cancellation Worker" as CancellationWorker
+}
+
+package "3. Data Persistence" {
+  component "Persistence Service" as Persistence {
+    component "StudentRepository" as StudentRepo
+    component "EventRepository" as EventRepo
+    component "ReservationRepository" as ReservationRepo
+    component "TransactionRepository" as TxRepo
+    component "TimingRepository" as TimingRepo
+  }
+  interface IPersistence
+  database "Database" as DB
+}
+
+' Provided interfaces
+Auth - IAuth
+StudentService - IStudentService
+EventService - IEventService
+TransactionService - ITransactionService
+MetricsService - IMetrics
+CancellationQueue - IQueue
+Persistence - IPersistence
+
+' Consumers require services
+StudentConsumer ..> IStudentService : <<use>>
+StudentConsumer ..> IEventService : <<use>>
+StudentConsumer ..> ITransactionService : <<use>>
+AdminConsumer ..> IStudentService : <<use>>
+AdminConsumer ..> IEventService : <<use>>
+AdminConsumer ..> ITransactionService : <<use>>
+AdminConsumer ..> IMetrics : <<use>>
+
+' Services internal dependencies
+StudentService ..> IAuth : <<use>>
+EventService ..> IAuth : <<use>>
+TransactionService ..> IAuth : <<use>>
+MetricsService ..> IAuth : <<use>>
+TransactionService ..> IStudentService : validate student
+TransactionService ..> IEventService : event date + limit
+TransactionService ..> IQueue : enqueue cancellation
+CancellationWorker ..> IQueue : dequeue / ack
+
+' Services require persistence
+StudentService ..> IPersistence : <<use>>
+EventService ..> IPersistence : <<use>>
+TransactionService ..> IPersistence : <<use>>
+CancellationWorker ..> IPersistence : applyCancellation
+MetricsService ..> IPersistence : timing records
+
+Persistence --> DB : SQL
+
+note right of IStudentService
+  createStudent, getStudent,
+  updateStudent, deleteStudent,
+  listStudents
+end note
+
+note right of IEventService
+  CRUD events / dates / places,
+  getEvent, getEventDate,
+  listEventsByMonth
+end note
+
+note right of ITransactionService
+  reserve, modifyReservation,
+  cancelReservation (async),
+  getRequestStatus, topUp,
+  listStudentReservations,
+  listTransactions
+end note
+
+note right of IPersistence
+  get / list / insert / update / delete,
+  applyReservationChange,
+  applyCancellation,
+  findTransactionByRequestId,
+  listEventDatesBetween
+end note
+
+@enduml

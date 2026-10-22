@@ -1,0 +1,50 @@
+@startuml seq-06-create-event
+title Sequence 6 – Admin creates an event with its dates (synchronous)
+
+skinparam shadowing false
+autonumber
+
+actor Admin
+participant "Admin\nConsumer" as C
+participant "Auth\nModule" as A
+participant "Event\nService" as ES
+participant "Persistence\nService" as P
+database "Database" as DB
+
+Admin -> C : fill event form\n(name, spot, price, dates)
+activate C
+C -> C : requestId = newUUID()
+C -> ES : createEvent(token, requestId, name,\nplaceId | (externalAddress, externalCapacity),\nprice, dates[])
+activate ES
+ES -> A : validateToken(token)
+A --> ES : principal (role = ADMIN)
+
+alt role is not ADMIN
+  ES --> C : FORBIDDEN
+else admin
+  ES -> ES : validate: exactly one of placeId /\nexternalAddress, externalCapacity > 0,\nprice >= 0, at least one date, dates in future
+
+  opt university place
+    ES -> P : getPlace(placeId)
+    activate P
+    P --> ES : Place (capacity)
+    deactivate P
+  end
+
+  alt invalid
+    ES --> C : ERROR (INVALID_SPOT, PLACE_NOT_FOUND, ...)
+  else valid
+    ES -> P : insertEventWithDates(event, dates[])
+    activate P
+    P -> DB : BEGIN; INSERT event;\nINSERT event_date x n (reservations = 0); COMMIT
+    DB --> P : ok
+    P --> ES : Event + EventDate[]
+    deactivate P
+    ES --> C : Event (limit = place.capacity\nor externalCapacity)
+  end
+end
+deactivate ES
+C --> Admin : show created event
+deactivate C
+
+@enduml

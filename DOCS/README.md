@@ -28,6 +28,7 @@ Consumers  ──►  Services  ──►  Data Persistence
 | [distributed-concerns.md](distributed-concerns.md) | Consistency, concurrency, failures, idempotency |
 | [performance-indicators.md](performance-indicators.md) | Performance indicators, the < 1 s target, load-test scenarios |
 | [decisions.md](decisions.md) | Decisions taken and decisions still open |
+| [diagrams/](diagrams/README.md) | UML diagrams (PlantUML): deployment, component, class and sequence diagrams |
 
 ## Conventions
 

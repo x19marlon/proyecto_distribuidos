@@ -1,0 +1,68 @@
+@startuml seq-03-modify
+title Sequence 3 – Modify a reservation: spots and/or date (synchronous)
+
+skinparam shadowing false
+autonumber
+
+actor Student
+participant "Student\nConsumer" as C
+participant "Auth\nModule" as A
+participant "Transaction\nService" as TS
+participant "Cancellation\nQueue" as Q
+participant "Persistence\nService" as P
+database "Database" as DB
+
+Student -> C : change reservation R\nto M spots on date D2
+activate C
+C -> C : requestId = newUUID()
+C -> TS : modifyReservation(token, requestId, R,\nnewSpots = M, newEventDateId = D2)
+activate TS
+TS -> A : validateToken(token)
+A --> TS : studentId
+
+TS -> P : findTransactionByRequestId(requestId)
+activate P
+P --> TS : not found
+deactivate P
+
+TS -> Q : hasPendingFor(R)
+activate Q
+Q --> TS : false
+deactivate Q
+
+TS -> P : getReservation(R), getEventDate(D1), getEventDate(D2), getEvent
+activate P
+P --> TS : Reservation(D1, N spots), EventDates, Event
+deactivate P
+
+TS -> TS : validate:\nowner = studentId, ACTIVE,\nD2 same event, dates not past,\nM >= 1, room on D2, something changes,\nbalance >= (M - N) x price
+
+alt validation fails
+  TS --> C : ERROR (e.g. NOT_ENOUGH_SPOTS,\nRESERVATION_NOT_OWNED, NO_CHANGE)
+else validation ok
+  TS -> P : applyReservationChange(tx, R{D2, M},\n[D1: -N, D2: +M], balance: -(M - N) x price)
+  activate P
+  P -> DB : BEGIN
+  activate DB
+  P -> DB : lock event_date rows in id order (D1, D2)
+  P -> DB : UPDATE event_date D1: reservations - N
+  P -> DB : UPDATE event_date D2: reservations + M\nWHERE reservations + M <= limit
+  P -> DB : UPDATE student balance
+  P -> DB : UPDATE reservation, INSERT transaction (MODIFICATION)
+  P -> DB : COMMIT
+  DB --> P : ok
+  deactivate DB
+  P --> TS : COMMITTED
+  deactivate P
+  TS --> C : updated Reservation + Transaction
+end
+deactivate TS
+C --> Student : show updated reservation
+deactivate C
+
+note over P, DB
+  All-or-nothing: if D2 has no room,
+  ROLLBACK and R stays on D1 with N spots.
+end note
+
+@enduml

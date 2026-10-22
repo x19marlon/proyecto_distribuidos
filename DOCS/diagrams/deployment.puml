@@ -1,0 +1,65 @@
+@startuml deployment
+title UML Deployment Diagram – University Events Transaction System
+
+skinparam shadowing false
+skinparam node {
+  BackgroundColor #F8F8F8
+}
+
+node "Student device" as StudentPC <<device>> {
+  node "OS / Browser or runtime" <<execution environment>> {
+    artifact "student-consumer" as StudentApp <<artifact>>
+  }
+}
+
+node "Admin device" as AdminPC <<device>> {
+  node "OS / Browser or runtime" as AdminEnv <<execution environment>> {
+    artifact "admin-consumer" as AdminApp <<artifact>>
+  }
+}
+
+node "Services server (Machine B)" as ServicesServer <<device>> {
+  node "Application runtime" as AppRuntime <<execution environment>> {
+    artifact "student-service" as StudentSvc <<artifact>>
+    artifact "event-service" as EventSvc <<artifact>>
+    artifact "transaction-service" as TxSvc <<artifact>>
+    artifact "metrics-service" as MetricsSvc <<artifact>>
+    artifact "cancellation-worker" as Worker <<artifact>>
+  }
+  node "Message broker" as Broker <<execution environment>> {
+    artifact "cancellation-queue\n(durable)" as Queue <<artifact>>
+  }
+  artifact "services.config\n(addresses, ports, timeouts,\nsecrets – not in repo)" as SvcConfig <<file>>
+}
+
+node "Data server (Machine C)" as DataServer <<device>> {
+  node "Application runtime" as PersRuntime <<execution environment>> {
+    artifact "persistence-service" as PersSvc <<artifact>>
+  }
+  node "DBMS" as DBMS <<execution environment>> {
+    database "events_db" as DB
+  }
+  artifact "persistence.config" as PersConfig <<file>>
+}
+
+StudentPC -- ServicesServer : <<TLS>>\nsync RPC / HTTP+JSON\n(university network / Internet)
+AdminPC -- ServicesServer : <<TLS>>\nsync RPC / HTTP+JSON
+ServicesServer -- DataServer : <<TLS>>\nsync RPC\n(private network)
+PersRuntime -- DBMS : <<local>>\nSQL
+
+TxSvc ..> Queue : enqueue
+Worker ..> Queue : dequeue / ack
+
+note right of DataServer
+  Not reachable from
+  consumer networks
+  (network isolation).
+end note
+
+note bottom of ServicesServer
+  Development: all nodes
+  can run on one machine
+  on different ports.
+end note
+
+@enduml
