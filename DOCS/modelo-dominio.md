@@ -1,5 +1,7 @@
 # Modelo de Dominio
 
+> **Entrega 1:** `Estudiante`, `Evento`, `FechaEvento`, `Lugar`, `Reserva` y `Transaccion` están implementadas como clases C++ en `src/persistencia/Modelo.hpp` (`SolicitudCancelacion` aún no); `Lugar` es abstracta con las subclases `LugarUniversidad` y `LugarExterno`. Ver [implementacion.md](implementacion.md).
+
 Las clases principales son `Estudiante`, `Evento`, `FechaEvento`, `Lugar`,
 `Reserva`, `Transaccion` y `SolicitudCancelacion`, y la clase de servicio
 **`GestorTransacciones`**, que las administra.

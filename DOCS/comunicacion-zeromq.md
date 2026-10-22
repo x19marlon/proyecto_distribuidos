@@ -1,5 +1,7 @@
 # Comunicación con ZeroMQ
 
+> **Entrega 1:** lo implementado (solo consulta y reserva) usa al `GestorTransacciones` como broker con balanceo de carga (`ROUTER`↔`DEALER` con latidos) y `REQ`/`REP` con Lazy Pirate hacia persistencia. Los mensajes son texto `clave=valor` (clase `Mensaje`), no JSON. PUB/SUB para cancelaciones, el broker Majordomo, Binary Star y CurveZMQ quedan para entregas siguientes. Ver [implementacion.md](implementacion.md).
+
 Toda la comunicación entre procesos usa [ZeroMQ](https://zeromq.org/) (ØMQ).
 Este documento define qué patrones y sockets de ZeroMQ usa cada enlace, el
 formato de los mensajes, y los **patrones de confiabilidad de ZeroMQ** que hacen

@@ -1,5 +1,7 @@
 # Arquitectura
 
+> **Entrega 1:** este documento describe el diseño objetivo. Lo implementado cubre solo la consulta y la reserva de eventos, sobre la parte síncrona de la Figura 1 (Arquitectura Básica): Clientes → Gestor de Transacciones → Procesamiento RMC → Servicio de Persistencia. Ver [implementacion.md](implementacion.md).
+
 ## Visión general
 
 El sistema sigue una arquitectura estricta de tres capas. Cada capa solo se
