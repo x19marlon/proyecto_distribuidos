@@ -46,7 +46,7 @@ Fill in the "Decision" column once the team agrees.
 | O13 | Durable queue for cancellations | RabbitMQ, ZeroMQ + log file, Redis list, `pending_cancellation` table in a separate store | |
 | O14 | While a cancellation is pending, can the reservation be modified? | Blocked with `CANCELLATION_PENDING` (current design), allowed (cancellation applies to the latest state) | |
 | O15 | How does the student learn the final result? | Polls `getRequestStatus` (current design), push notification / email | |
-| O16 | Metrics tool | Prometheus + Grafana, logs to CSV + script, custom performance view in the admin consumer | |
+| O16 | Metrics tool (see [metrics-collection.md](metrics-collection.md)) | Track A: JSON timing records + analysis script; Track B: A + Prometheus, Grafana, exporters, OpenTelemetry/Jaeger (recommended: A from the start, B before failure tests) | |
 | O17 | Load-testing tool | JMeter, Locust, k6, custom script | |
 | O18 | Is p95 < 1 s enough, or must it be p99 / every transaction? | p95, p99, max | |
 | O19 | How do users authenticate? | University SSO/LDAP, own user/password table, no auth (demo only) | |

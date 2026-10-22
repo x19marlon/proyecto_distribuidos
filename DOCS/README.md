@@ -28,6 +28,7 @@ Consumers  ──►  Services  ──►  Data Persistence
 | [distributed-concerns.md](distributed-concerns.md) | Consistency, concurrency, failures, idempotency |
 | [fault-tolerance-scalability.md](fault-tolerance-scalability.md) | Components and phases to make the system fault tolerant and scalable |
 | [performance-indicators.md](performance-indicators.md) | Performance indicators, the < 1 s target, load-test scenarios |
+| [metrics-collection.md](metrics-collection.md) | Tools and strategies to obtain the performance indicators |
 | [test-plan.md](test-plan.md) | How we test functionality, concurrency, failures, security and performance |
 | [decisions.md](decisions.md) | Decisions taken and decisions still open |
 | [diagrams/](diagrams/README.md) | UML diagrams (PlantUML): deployment, component, class and sequence diagrams |
