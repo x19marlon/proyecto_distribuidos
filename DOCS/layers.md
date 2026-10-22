@@ -154,6 +154,9 @@ indicators.
 | `LIMIT_BELOW_RESERVATIONS` | New capacity lower than current reservations |
 | `INSUFFICIENT_BALANCE` | Balance lower than the cost |
 | `PERSISTENCE_UNAVAILABLE` | Lower layer did not respond |
+| `UNAUTHENTICATED` | Missing, invalid or expired token |
+| `FORBIDDEN` | Authenticated, but the role does not allow the operation |
+| `RATE_LIMITED` | Too many requests from the same student |
 
 ## 3. Data Persistence
 

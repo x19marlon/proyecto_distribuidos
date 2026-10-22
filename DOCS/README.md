@@ -21,6 +21,7 @@ Consumers  ──►  Services  ──►  Data Persistence
 |---|---|
 | [requirements.md](requirements.md) | Functional and non-functional requirements |
 | [architecture.md](architecture.md) | The three layers, how they communicate, deployment view |
+| [system-models.md](system-models.md) | Architectural, interaction, failure and security models applied to the project |
 | [domain-model.md](domain-model.md) | `Student`, `Event`, `EventDate`, `Place`, `Reservation` and `Transaction` entities |
 | [layers.md](layers.md) | Responsibilities, operations and tables of each layer |
 | [transaction-flow.md](transaction-flow.md) | Step-by-step flows: consult by month, reserve, modify, cancel, event CRUD |

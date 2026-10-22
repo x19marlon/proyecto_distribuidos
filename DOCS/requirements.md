@@ -63,3 +63,6 @@
 | RNF-07 | **Transaction time < 1 s:** every operation (and the acceptance of a cancellation) completes end-to-end in under one second for at least 95 % of requests (p95). See [performance-indicators.md](performance-indicators.md). |
 | RNF-08 | **Performance visibility:** the system records the time of every request in every layer, and the admin can see the performance indicators (response times, throughput, errors, queue state, consistency checks). |
 | RNF-09 | **Performance evaluation:** performance is evaluated with defined load-test scenarios, quantitatively (indicators) and qualitatively (responsiveness, stability, recovery). |
+| RNF-10 | **Security – authentication and authorization:** users and internal processes are authenticated; students can only see and change their own data and reservations; admin operations require the admin role. See [system-models.md](system-models.md#4-security-model). |
+| RNF-11 | **Security – confidentiality and integrity:** all network channels are encrypted (TLS); personal data (especially government ID) is masked in responses to non-admins and never written to logs. |
+| RNF-12 | **Fault tolerance:** crash and message-loss failures of any single process or channel must not cause duplicated, lost or half-applied operations. See [system-models.md](system-models.md#3-failure-model). |

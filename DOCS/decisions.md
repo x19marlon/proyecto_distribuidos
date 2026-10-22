@@ -22,6 +22,8 @@
 | D14 | `Reservation` holds the current state; `Transaction` is the immutable log of each change | Keeps the current booking easy to query while keeping full history |
 | D17 | Transaction time target: p95 < 1 s end-to-end (cancellation: acceptance) | Project requirement |
 | D18 | Every layer records request timings by `requestId`; admin can view performance indicators | Project requirement |
+| D19 | Failure model: processes crash (no Byzantine behavior), channels may lose/delay/duplicate messages; timeouts mean "unknown" | Basis for retries + idempotency design |
+| D20 | `studentId` for an operation always comes from the authenticated token, never from the request body | Prevents acting on other students' data |
 
 ## Open
 
@@ -47,3 +49,6 @@ Fill in the "Decision" column once the team agrees.
 | O16 | Metrics tool | Prometheus + Grafana, logs to CSV + script, custom performance view in the admin consumer | |
 | O17 | Load-testing tool | JMeter, Locust, k6, custom script | |
 | O18 | Is p95 < 1 s enough, or must it be p99 / every transaction? | p95, p99, max | |
+| O19 | How do users authenticate? | University SSO/LDAP, own user/password table, no auth (demo only) | |
+| O20 | How do internal processes authenticate? | Mutual TLS, shared secret, network isolation only | |
+| O21 | Encrypt personal data at rest? | Government ID column only, whole disk, no | |
