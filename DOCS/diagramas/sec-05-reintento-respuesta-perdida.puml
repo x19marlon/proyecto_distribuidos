@@ -1,0 +1,40 @@
+@startuml sec-05-reintento-respuesta-perdida
+title Secuencia 5 – Fallo: se pierde la respuesta, se reintenta con el mismo idSolicitud (idempotencia)
+
+skinparam shadowing false
+autonumber
+
+actor Estudiante
+participant "Consumidor\nEstudiante" as C
+participant "GestorTransacciones" as TS
+participant "Servicio de\nPersistencia" as P
+
+Estudiante -> C : reservar 2 cupos en la fecha D
+activate C
+C -> C : idSolicitud = "r-123"
+C -> TS : reservar(token, "r-123", D, 2)
+activate TS
+TS -> P : buscarTransaccionPorIdSolicitud("r-123")
+P --> TS : no encontrada
+TS -> P : aplicarCambioReserva(...)
+P --> TS : CONFIRMADA
+TS -x C : se pierde la respuesta (fallo de red)
+deactivate TS
+
+C -> C : Lazy Pirate: sin respuesta en 1 s → resultado desconocido;\ncerrar el socket REQ y reabrirlo
+
+C -> TS : reservar(token, "r-123", D, 2)  [reintento, mismo idSolicitud]
+activate TS
+TS -> P : buscarTransaccionPorIdSolicitud("r-123")
+P --> TS : transacción existente (CONFIRMADA)
+TS --> C : la misma Reserva + Transaccion\n(sin efecto nuevo)
+deactivate TS
+C --> Estudiante : mostrar la reserva (2 cupos, cobrados una sola vez)
+deactivate C
+
+note over C, P
+  Entrega al menos una vez + procesamiento idempotente
+  = efecto exactamente una vez (RNF-04).
+end note
+
+@enduml

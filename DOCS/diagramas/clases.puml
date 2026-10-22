@@ -1,0 +1,202 @@
+@startuml clases
+title Diagrama de Clases UML – Modelo de Dominio
+
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+
+package dominio {
+
+  class Estudiante {
+    - idEstudiante : String {id}
+    - nombre : String
+    - tipoDocumento : TipoDocumento
+    - numeroDocumento : String
+    - carrera : String
+    - departamento : String
+    - semestre : int
+    - correo : String {unique}
+    - telefono : String
+    - saldo : Decimal
+    - activo : boolean
+    + puedeReservar() : boolean
+    + tieneSaldo(monto : Decimal) : boolean
+    + documentoEnmascarado() : String
+  }
+
+  class Lugar {
+    - id : String {id}
+    - nombre : String
+    - tipo : TipoLugar
+    - capacidad : int
+  }
+
+  class Evento {
+    - id : String {id}
+    - nombre : String
+    - idLugar : String [0..1]
+    - direccionExterna : String [0..1]
+    - capacidadExterna : int [0..1]
+    - precio : Decimal
+    + limite() : int
+    + esPago() : boolean
+    + esExterno() : boolean
+  }
+
+  class FechaEvento {
+    - id : String {id}
+    - idEvento : String
+    - fecha : DateTime
+    - reservas : int
+    + disponibles() : int
+    + tieneEspacioPara(cupos : int) : boolean
+    + yaPaso() : boolean
+  }
+
+  class Reserva {
+    - id : String {id}
+    - idEstudiante : String
+    - idFechaEvento : String
+    - cupos : int
+    - montoPagado : Decimal
+    - estado : EstadoReserva
+    - creadoEn : DateTime
+    - actualizadoEn : DateTime
+    + estaActiva() : boolean
+    + costoDelCambio(cuposNuevos : int, precio : Decimal) : Decimal
+  }
+
+  class Transaccion {
+    - id : String {id}
+    - idEstudiante : String
+    - idReserva : String [0..1]
+    - tipo : TipoTransaccion
+    - idFechaOrigen : String [0..1]
+    - idFechaDestino : String [0..1]
+    - cuposAnteriores : int
+    - cuposNuevos : int
+    - monto : Decimal
+    - estado : EstadoTransaccion
+    - creadoEn : DateTime
+    - idSolicitud : String {unique}
+  }
+
+  class SolicitudCancelacion {
+    - idSolicitud : String {id}
+    - idReserva : String
+    - idEstudiante : String
+    - estado : EstadoSolicitudCancelacion
+    - tomadaPor : String [0..1]
+    - bloqueoHasta : DateTime [0..1]
+    - aceptadaEn : DateTime
+    - intentos : int
+    + sePuedeTomar(ahora : DateTime) : boolean
+  }
+
+  class RegistroTiempo {
+    - idSolicitud : String
+    - capa : Capa
+    - operacion : String
+    - inicio : DateTime
+    - fin : DateTime
+    - resultado : String
+    + duracionMs() : long
+  }
+
+  enum TipoLugar {
+    EDIFICIO
+    TEATRO
+  }
+
+  enum TipoDocumento {
+    CC
+    TI
+    CE
+    PASAPORTE
+  }
+
+  enum EstadoReserva {
+    ACTIVA
+    CANCELADA
+  }
+
+  enum TipoTransaccion {
+    RESERVA
+    MODIFICACION
+    CANCELACION
+    RECARGA
+  }
+
+  enum EstadoTransaccion {
+    PENDIENTE
+    CONFIRMADA
+    FALLIDA
+  }
+
+  enum EstadoSolicitudCancelacion {
+    PENDIENTE
+    EN_PROCESO
+    COMPLETADA
+    FALLIDA
+  }
+
+  enum Capa {
+    CONSUMIDOR
+    SERVICIOS
+    PERSISTENCIA
+  }
+}
+
+package servicios {
+
+  class GestorTransacciones <<servicio "transacciones">> {
+    + reservar(idSolicitud : String, idEstudiante : String, idFechaEvento : String, cupos : int) : Transaccion
+    + modificarReserva(idSolicitud : String, idReserva : String, cuposNuevos : int, idFechaNueva : String) : Transaccion
+    + cancelarReserva(idSolicitud : String, idReserva : String) : Aceptada
+    + consultarEstadoSolicitud(idSolicitud : String) : EstadoTransaccion
+    + recargarSaldo(idSolicitud : String, idEstudiante : String, monto : Decimal) : Transaccion
+    + listarReservasEstudiante(idEstudiante : String) : Reserva[*]
+    + listarTransacciones(idEstudiante : String) : Transaccion[*]
+  }
+}
+
+Estudiante "1" -- "0..*" Reserva : tiene >
+Estudiante "1" -- "0..*" Transaccion : realiza >
+Evento "1" *-- "1..*" FechaEvento : ocurre en >
+Lugar "0..1" -- "0..*" Evento : alberga >
+FechaEvento "1" -- "0..*" Reserva : reservada por >
+Reserva "1" -- "1..*" Transaccion : historial >
+SolicitudCancelacion "0..*" -- "1" Reserva : apunta a >
+SolicitudCancelacion --> EstadoSolicitudCancelacion
+SolicitudCancelacion ..> Transaccion : se convierte en CANCELACION >
+
+GestorTransacciones ..> Transaccion : crea >
+GestorTransacciones ..> Reserva : administra >
+GestorTransacciones ..> SolicitudCancelacion : guarda >
+GestorTransacciones ..> Estudiante : valida >
+GestorTransacciones ..> FechaEvento : verifica cupos >
+
+Estudiante --> TipoDocumento
+Lugar --> TipoLugar
+Reserva --> EstadoReserva
+Transaccion --> TipoTransaccion
+Transaccion --> EstadoTransaccion
+RegistroTiempo --> Capa
+
+note bottom of Evento
+  Exactamente uno de idLugar / direccionExterna.
+  limite() = lugar.capacidad si hay idLugar,
+             si no capacidadExterna
+end note
+
+note bottom of FechaEvento
+  0 <= reservas <= evento.limite()
+  reservas = suma(cupos de las reservas ACTIVA)
+end note
+
+note right of Transaccion
+  Inmutable una vez CONFIRMADA.
+  monto < 0: cobro, > 0: reembolso / recarga
+end note
+
+@enduml

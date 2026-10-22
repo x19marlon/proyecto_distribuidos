@@ -1,40 +1,44 @@
-# Project Documentation
+# Documentación del Proyecto
 
-Distributed transaction system for university events.
+Sistema distribuido de transacciones para eventos universitarios.
 
-Students consult the events of a month, reserve spots on an event date, and can
-modify (number of spots and/or date) or cancel their reservations. Each
-reservation, modification or cancellation is recorded as a **transaction**.
-All operations are synchronous except cancellation, which is accepted
-immediately and applied asynchronously.
+Los estudiantes consultan los eventos de un mes, reservan cupos en una fecha de
+un evento, y pueden modificar (cantidad de cupos y/o fecha) o cancelar sus
+reservas. Cada reserva, modificación o cancelación queda registrada como una
+**transacción**, administrada por la clase **`GestorTransacciones`**.
+Todas las operaciones son síncronas excepto la cancelación, que se acepta de
+inmediato y se aplica de forma asíncrona.
 
-The system is split into three layers that run as independent processes and
-talk to each other over the network:
+El sistema está dividido en tres capas que corren como procesos independientes
+y se comunican por la red con ZeroMQ:
 
 ```
-Consumers  ──►  Services  ──►  Data Persistence
+Consumidores  ──►  Servicios  ──►  Persistencia de Datos
 ```
 
-## Index
+## Índice
 
-| Document | Contents |
+| Documento | Contenido |
 |---|---|
-| [requirements.md](requirements.md) | Functional and non-functional requirements |
-| [architecture.md](architecture.md) | The three layers, how they communicate, deployment view |
-| [system-models.md](system-models.md) | Architectural, interaction, failure and security models applied to the project |
-| [domain-model.md](domain-model.md) | `Student`, `Event`, `EventDate`, `Place`, `Reservation` and `Transaction` entities |
-| [layers.md](layers.md) | Responsibilities, operations and tables of each layer |
-| [transaction-flow.md](transaction-flow.md) | Step-by-step flows: consult by month, reserve, modify, cancel, event CRUD |
-| [distributed-concerns.md](distributed-concerns.md) | Consistency, concurrency, failures, idempotency |
-| [fault-tolerance-scalability.md](fault-tolerance-scalability.md) | Components and phases to make the system fault tolerant and scalable |
-| [performance-indicators.md](performance-indicators.md) | Performance indicators, the < 1 s target, load-test scenarios |
-| [metrics-collection.md](metrics-collection.md) | Tools and strategies to obtain the performance indicators |
-| [test-plan.md](test-plan.md) | How we test functionality, concurrency, failures, security and performance |
-| [decisions.md](decisions.md) | Decisions taken and decisions still open |
-| [diagrams/](diagrams/README.md) | UML diagrams (PlantUML): deployment, component, class and sequence diagrams |
+| [requisitos.md](requisitos.md) | Requisitos funcionales y no funcionales |
+| [arquitectura.md](arquitectura.md) | Las tres capas, cómo se comunican, vista de despliegue |
+| [comunicacion-zeromq.md](comunicacion-zeromq.md) | Patrones ZeroMQ (REQ/ROUTER/DEALER, PUB/SUB), patrones de confiabilidad, formato de mensajes, CurveZMQ |
+| [despliegue-kubernetes.md](despliegue-kubernetes.md) | Despliegue en Kubernetes con 4 máquinas (1 plano de control + 3 workers) |
+| [modelos-sistema.md](modelos-sistema.md) | Modelos arquitectónico, de interacción, de fallos y de seguridad aplicados al proyecto |
+| [modelo-dominio.md](modelo-dominio.md) | Entidades `Estudiante`, `Evento`, `FechaEvento`, `Lugar`, `Reserva`, `Transaccion`, `SolicitudCancelacion` |
+| [capas.md](capas.md) | Responsabilidades, operaciones y tablas de cada capa |
+| [flujos.md](flujos.md) | Flujos paso a paso: consultar por mes, reservar, modificar, cancelar, CRUD de eventos |
+| [aspectos-distribuidos.md](aspectos-distribuidos.md) | Consistencia, concurrencia, fallos, idempotencia |
+| [tolerancia-fallos-escalabilidad.md](tolerancia-fallos-escalabilidad.md) | Componentes y fases para que el sistema sea tolerante a fallos y escalable |
+| [indicadores-desempeno.md](indicadores-desempeno.md) | Indicadores de desempeño, la meta de < 1 s, escenarios de carga |
+| [recoleccion-metricas.md](recoleccion-metricas.md) | Herramientas y estrategias para obtener los indicadores |
+| [plan-pruebas.md](plan-pruebas.md) | Cómo probamos funcionalidad, concurrencia, fallos, seguridad y desempeño |
+| [decisiones.md](decisiones.md) | Decisiones tomadas y decisiones pendientes |
+| [diagramas/](diagramas/README.md) | Diagramas UML (PlantUML): despliegue, componentes, clases y secuencia |
 
-## Conventions
+## Convenciones
 
-- Diagrams are written in [Mermaid](https://mermaid.js.org/) so they render on GitHub.
-- Anything marked **(proposal)** is a suggestion that the team has not yet confirmed.
-  Record the final choice in [decisions.md](decisions.md).
+- Los diagramas dentro de los `.md` están en [Mermaid](https://mermaid.js.org/) para que GitHub los muestre.
+- Los diagramas UML están en PlantUML dentro de [diagramas/](diagramas/README.md).
+- Todo lo marcado como **(propuesta)** es una sugerencia que el equipo aún no ha confirmado.
+  La decisión final se registra en [decisiones.md](decisiones.md).

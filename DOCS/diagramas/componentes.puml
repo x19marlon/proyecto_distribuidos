@@ -1,0 +1,98 @@
+@startuml componentes
+title Diagrama de Componentes UML – Comunicación con ZeroMQ
+
+skinparam shadowing false
+skinparam componentStyle uml2
+
+package "1. Consumidores" {
+  [Consumidor Estudiante\n<<REQ, Lazy Pirate>>] as ConsumidorEstudiante
+  [Consumidor Administrador\n<<REQ, Lazy Pirate>>] as ConsumidorAdmin
+}
+
+package "2. Servicios" {
+  component "broker-servicios\n<<Majordomo, Binary Star>>" as SB
+  interface "Cliente MDP\n(ROUTER :5555)" as SBFront
+  interface "Worker MDP\n(ROUTER :5556)" as SBBack
+
+  component "Módulo de Autenticación" as Auth
+  interface IAutenticacion
+
+  component "gestor-estudiantes\n<<worker DEALER>>" as GestorEstudiantes
+  component "gestor-eventos\n<<worker DEALER>>" as GestorEventos
+  component "GestorTransacciones\n<<worker DEALER, PUB>>" as GestorTransacciones
+  component "gestor-metricas\n<<worker DEALER>>" as GestorMetricas
+
+  component "proxy-cancelaciones\n<<XSUB / XPUB>>" as Proxy
+  interface "XSUB :5570" as ProxyEntrada
+  interface "XPUB :5571" as ProxySalida
+
+  component "trabajador-cancelaciones\n<<SUB, cliente Lazy Pirate>>" as TrabajadorCancelaciones
+}
+
+package "3. Persistencia de Datos" {
+  component "broker-persistencia\n<<Majordomo, Binary Star>>" as PB
+  interface "Cliente MDP\n(ROUTER :5565)" as PBFront
+  interface "Worker MDP\n(ROUTER :5566)" as PBBack
+
+  component "trabajador-persistencia\n<<worker DEALER>>" as Persistencia {
+    component "RepositorioEstudiantes" as RepoEstudiantes
+    component "RepositorioEventos" as RepoEventos
+    component "RepositorioReservas" as RepoReservas
+    component "RepositorioTransacciones" as RepoTransacciones
+    component "RepositorioSolicitudesCancelacion" as RepoCancelaciones
+    component "RepositorioTiempos" as RepoTiempos
+  }
+  database "PostgreSQL\n(CloudNativePG)" as BD
+}
+
+' Interfaces provistas
+SB - SBFront
+SB - SBBack
+Auth - IAutenticacion
+Proxy - ProxyEntrada
+Proxy - ProxySalida
+PB - PBFront
+PB - PBBack
+
+' Consumidores → broker-servicios
+ConsumidorEstudiante ..> SBFront : REQ\nservicios: estudiantes, eventos, transacciones
+ConsumidorAdmin ..> SBFront : REQ\n+ metricas
+
+' Los workers de servicio se registran en el broker
+GestorEstudiantes ..> SBBack : DEALER\nREADY "estudiantes"
+GestorEventos ..> SBBack : DEALER\nREADY "eventos"
+GestorTransacciones ..> SBBack : DEALER\nREADY "transacciones"
+GestorMetricas ..> SBBack : DEALER\nREADY "metricas"
+
+GestorEstudiantes ..> IAutenticacion
+GestorEventos ..> IAutenticacion
+GestorTransacciones ..> IAutenticacion
+GestorMetricas ..> IAutenticacion
+
+' Notificaciones de cancelación
+GestorTransacciones ..> ProxyEntrada : PUB "cancelacion"
+TrabajadorCancelaciones ..> ProxySalida : SUB "cancelacion"
+
+' Servicios → broker-persistencia
+GestorEstudiantes ..> PBFront : REQ (Lazy Pirate)
+GestorEventos ..> PBFront : REQ
+GestorTransacciones ..> PBFront : REQ
+GestorMetricas ..> PBFront : REQ
+TrabajadorCancelaciones ..> PBFront : REQ\ntomar / aplicar / barrer
+
+Persistencia ..> PBBack : DEALER\nREADY "persistencia"
+Persistencia --> BD : SQL
+
+note right of SB
+  Balanceo de carga LRU por solicitud,
+  heartbeats cada 1 s (Paranoid Pirate),
+  par primario/respaldo (Binary Star).
+end note
+
+note right of Proxy
+  No guarda nada. Las notificaciones
+  perdidas las recupera el barrido de los
+  trabajadores desde solicitud_cancelacion.
+end note
+
+@enduml

@@ -1,0 +1,67 @@
+@startuml sec-03-modificar
+title Secuencia 3 – Modificar una reserva: cupos y/o fecha (síncrono)
+
+skinparam shadowing false
+autonumber
+
+actor Estudiante
+participant "Consumidor\nEstudiante" as C
+participant "Módulo de\nAutenticación" as A
+participant "GestorTransacciones" as TS
+participant "Servicio de\nPersistencia" as P
+database "Base de datos" as BD
+
+Estudiante -> C : cambiar la reserva R\na M cupos en la fecha D2
+activate C
+C -> C : idSolicitud = nuevoUUID()
+C -> TS : modificarReserva(token, idSolicitud, R,\ncuposNuevos = M, idFechaNueva = D2)
+activate TS
+TS -> A : validarToken(token)
+A --> TS : idEstudiante
+
+TS -> P : buscarTransaccionPorIdSolicitud(idSolicitud)
+activate P
+P --> TS : no encontrada
+deactivate P
+
+TS -> P : obtenerSolicitudCancelacionDe(R)
+activate P
+P --> TS : ninguna pendiente
+deactivate P
+
+TS -> P : obtenerReserva(R), obtenerFechaEvento(D1), obtenerFechaEvento(D2), obtenerEvento
+activate P
+P --> TS : Reserva(D1, N cupos), FechasEvento, Evento
+deactivate P
+
+TS -> TS : validar:\ndueño = idEstudiante, ACTIVA,\nD2 del mismo evento, fechas no pasadas,\nM >= 1, espacio en D2, algo cambia,\nsaldo >= (M - N) x precio
+
+alt la validación falla
+  TS --> C : ERROR (p. ej. CUPOS_INSUFICIENTES,\nRESERVA_AJENA, SIN_CAMBIOS)
+else validación correcta
+  TS -> P : aplicarCambioReserva(tx, R{D2, M},\n[D1: -N, D2: +M], saldo: -(M - N) x precio)
+  activate P
+  P -> BD : BEGIN
+  activate BD
+  P -> BD : bloquear filas de fecha_evento en orden de id (D1, D2)
+  P -> BD : UPDATE fecha_evento D1: reservas - N
+  P -> BD : UPDATE fecha_evento D2: reservas + M\nWHERE reservas + M <= limite
+  P -> BD : UPDATE saldo del estudiante
+  P -> BD : UPDATE reserva, INSERT transacciones (MODIFICACION)
+  P -> BD : COMMIT
+  BD --> P : ok
+  deactivate BD
+  P --> TS : CONFIRMADA
+  deactivate P
+  TS --> C : Reserva actualizada + Transaccion
+end
+deactivate TS
+C --> Estudiante : mostrar la reserva actualizada
+deactivate C
+
+note over P, BD
+  Todo o nada: si D2 no tiene espacio,
+  ROLLBACK y R se queda en D1 con N cupos.
+end note
+
+@enduml

@@ -1,0 +1,78 @@
+@startuml despliegue
+title Diagrama de Despliegue UML – Kubernetes (1 plano de control + 3 workers), ZeroMQ
+
+skinparam shadowing false
+skinparam node {
+  BackgroundColor #F8F8F8
+}
+
+node "Dispositivo del estudiante / administrador" as Cliente <<dispositivo>> {
+  artifact "consumidor-estudiante\nconsumidor-administrador\n(REQ, Lazy Pirate)" as AppConsumidor <<artefacto>>
+}
+
+node "cp-1" as CP <<dispositivo>> {
+  node "Plano de control de Kubernetes" as EntornoCP <<entorno de ejecución>> {
+    artifact "kube-apiserver" as Api
+    artifact "scheduler\ncontroller-manager" as Sched
+    database "etcd" as Etcd
+  }
+}
+
+node "worker-1" as W1 <<dispositivo>> {
+  node "kubelet + containerd" as K1 <<entorno de ejecución>> {
+    artifact "broker-servicios-0\n(Majordomo, primario Binary Star)\nROUTER :5555 / ROUTER :5556" as SB0 <<pod>>
+    artifact "broker-persistencia-1\n(respaldo Binary Star)" as PB1 <<pod>>
+    artifact "gestor-transacciones\n(DEALER)" as TX1 <<pod>>
+    artifact "gestor-estudiantes\n(DEALER)" as ST1 <<pod>>
+    artifact "trabajador-persistencia\n(DEALER)" as PW1 <<pod>>
+    artifact "trabajador-cancelaciones\n(SUB + barrido)" as CW1 <<pod>>
+    database "postgres-1\n(primaria)" as PG1 <<pod>>
+  }
+}
+
+node "worker-2" as W2 <<dispositivo>> {
+  node "kubelet + containerd" as K2 <<entorno de ejecución>> {
+    artifact "broker-servicios-1\n(respaldo Binary Star)" as SB1 <<pod>>
+    artifact "broker-persistencia-0\n(Majordomo, primario Binary Star)\nROUTER :5565 / ROUTER :5566" as PB0 <<pod>>
+    artifact "gestor-transacciones\n(DEALER)" as TX2 <<pod>>
+    artifact "gestor-eventos\n(DEALER)" as EV1 <<pod>>
+    artifact "trabajador-persistencia\n(DEALER)" as PW2 <<pod>>
+    artifact "proxy-cancelaciones\nXSUB :5570 / XPUB :5571" as CX <<pod>>
+    database "postgres-2\n(réplica síncrona)" as PG2 <<pod>>
+  }
+}
+
+node "worker-3" as W3 <<dispositivo>> {
+  node "kubelet + containerd" as K3 <<entorno de ejecución>> {
+    artifact "gestor-transacciones\n(DEALER)" as TX3 <<pod>>
+    artifact "gestor-estudiantes / gestor-eventos\n(DEALER)" as SE3 <<pod>>
+    artifact "gestor-metricas\n(DEALER)" as MS <<pod>>
+    artifact "trabajador-persistencia\n(DEALER)" as PW3 <<pod>>
+    artifact "trabajador-cancelaciones\n(SUB + barrido)" as CW2 <<pod>>
+    database "postgres-3\n(réplica)" as PG3 <<pod>>
+    artifact "Prometheus / Grafana /\nAlertmanager" as Mon <<pod>>
+  }
+}
+
+Cliente -- W1 : <<ZeroMQ REQ, CurveZMQ>>\nNodePort 30555 (primario)
+Cliente -- W2 : <<ZeroMQ REQ, CurveZMQ>>\nNodePort 30565 (respaldo)
+CP -- W1 : <<HTTPS>>\nAPI de kubelet
+CP -- W2 : <<HTTPS>>
+CP -- W3 : <<HTTPS>>
+W1 -- W2 : <<ZeroMQ, CurveZMQ>>\nDEALER→ROUTER, PUB/SUB,\nestado Binary Star
+W2 -- W3 : <<ZeroMQ, CurveZMQ>>
+W1 -- W3 : <<ZeroMQ / replicación PostgreSQL>>
+
+note bottom of CP
+  Con taint NoSchedule: no corre pods de la aplicación.
+  Si falla, los pods en ejecución siguen funcionando,
+  pero no se reubica nada.
+end note
+
+note bottom of W3
+  La ubicación exacta la decide el scheduler;
+  la anti-afinidad mantiene las réplicas de cada componente
+  (y cada instancia de postgres) en nodos distintos.
+end note
+
+@enduml

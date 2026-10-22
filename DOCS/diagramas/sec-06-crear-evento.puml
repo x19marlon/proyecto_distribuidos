@@ -1,0 +1,50 @@
+@startuml sec-06-crear-evento
+title Secuencia 6 – El administrador crea un evento con sus fechas (síncrono)
+
+skinparam shadowing false
+autonumber
+
+actor Administrador
+participant "Consumidor\nAdministrador" as C
+participant "Módulo de\nAutenticación" as A
+participant "Gestor de\nEventos" as ES
+participant "Servicio de\nPersistencia" as P
+database "Base de datos" as BD
+
+Administrador -> C : llenar el formulario del evento\n(nombre, lugar, precio, fechas)
+activate C
+C -> C : idSolicitud = nuevoUUID()
+C -> ES : crearEvento(token, idSolicitud, nombre,\nidLugar | (direccionExterna, capacidadExterna),\nprecio, fechas[])
+activate ES
+ES -> A : validarToken(token)
+A --> ES : principal (rol = ADMINISTRADOR)
+
+alt el rol no es ADMINISTRADOR
+  ES --> C : PROHIBIDO
+else administrador
+  ES -> ES : validar: exactamente uno de idLugar /\ndireccionExterna, capacidadExterna > 0,\nprecio >= 0, al menos una fecha, fechas futuras
+
+  opt lugar de la universidad
+    ES -> P : obtenerLugar(idLugar)
+    activate P
+    P --> ES : Lugar (capacidad)
+    deactivate P
+  end
+
+  alt inválido
+    ES --> C : ERROR (UBICACION_INVALIDA, LUGAR_NO_ENCONTRADO, ...)
+  else válido
+    ES -> P : insertarEventoConFechas(evento, fechas[])
+    activate P
+    P -> BD : BEGIN; INSERT evento;\nINSERT fecha_evento x n (reservas = 0); COMMIT
+    BD --> P : ok
+    P --> ES : Evento + FechaEvento[]
+    deactivate P
+    ES --> C : Evento (limite = lugar.capacidad\no capacidadExterna)
+  end
+end
+deactivate ES
+C --> Administrador : mostrar el evento creado
+deactivate C
+
+@enduml

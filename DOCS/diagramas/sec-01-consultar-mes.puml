@@ -1,0 +1,54 @@
+@startuml sec-01-consultar-mes
+title Secuencia 1 – Consultar los eventos de un mes y sus cupos (síncrono)
+
+skinparam shadowing false
+autonumber
+
+actor Estudiante
+participant "Consumidor\nEstudiante" as C
+participant "Módulo de\nAutenticación" as A
+participant "Gestor de\nEventos" as ES
+participant "Servicio de\nPersistencia" as P
+database "Base de datos" as BD
+
+Estudiante -> C : elegir mes (año, mes)
+activate C
+C -> ES : listarEventosPorMes(token, anio, mes)
+activate ES
+ES -> A : validarToken(token)
+activate A
+A --> ES : principal (idEstudiante, rol)
+deactivate A
+ES -> P : listarFechasEventoEntre(primerDia, ultimoDia)
+activate P
+P -> BD : SELECT fecha_evento JOIN evento LEFT JOIN lugar
+activate BD
+BD --> P : filas
+deactivate BD
+P --> ES : FechaEvento[] con Evento, Lugar
+deactivate P
+ES -> ES : calcular límite y disponibles por fecha
+ES --> C : [nombre, fecha, lugar, precio,\nreservas, límite, disponibles]
+deactivate ES
+C --> Estudiante : mostrar el calendario del mes
+
+Estudiante -> C : seleccionar evento
+C -> ES : obtenerEvento(token, idEvento)
+activate ES
+ES -> A : validarToken(token)
+A --> ES : principal
+ES -> P : obtenerEvento(idEvento), listarFechasEvento(idEvento)
+activate P
+P --> ES : Evento, FechaEvento[], Lugar
+deactivate P
+ES --> C : evento con cada fecha:\nreservas / límite / disponibles
+deactivate ES
+C --> Estudiante : mostrar cupos por fecha
+deactivate C
+
+note over C, P
+  Solo lectura: no necesita idSolicitud, se puede reintentar.
+  Meta de tiempo de extremo a extremo p95 < 1 s.
+end note
+
+@enduml

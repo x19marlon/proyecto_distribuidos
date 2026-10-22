@@ -1,0 +1,73 @@
+@startuml sec-02-reservar
+title Secuencia 2 – Reservar N cupos en una fecha de evento (síncrono)
+
+skinparam shadowing false
+autonumber
+
+actor Estudiante
+participant "Consumidor\nEstudiante" as C
+participant "Módulo de\nAutenticación" as A
+participant "GestorTransacciones" as TS
+participant "Gestor de\nEstudiantes" as SS
+participant "Gestor de\nEventos" as ES
+participant "Servicio de\nPersistencia" as P
+database "Base de datos" as BD
+
+Estudiante -> C : reservar N cupos en la fecha D
+activate C
+C -> C : idSolicitud = nuevoUUID()
+C -> TS : reservar(token, idSolicitud, D, N)
+activate TS
+TS -> A : validarToken(token)
+A --> TS : idEstudiante (del token)
+
+TS -> P : buscarTransaccionPorIdSolicitud(idSolicitud)
+activate P
+P --> TS : no encontrada
+deactivate P
+
+TS -> SS : obtenerEstudiante(idEstudiante)
+activate SS
+SS -> P : obtenerEstudiante(idEstudiante)
+P --> SS : Estudiante
+SS --> TS : Estudiante
+deactivate SS
+
+TS -> ES : obtenerFechaEvento(D)
+activate ES
+ES -> P : obtenerFechaEvento(D), obtenerEvento, obtenerLugar
+P --> ES : FechaEvento, Evento, Lugar
+ES --> TS : FechaEvento + límite + precio
+deactivate ES
+
+TS -> TS : validar:\nactivo, no pasada, N >= 1,\ndisponibles >= N, sin reserva activa\nen este evento, saldo >= N x precio
+
+alt la validación falla
+  TS --> C : ERROR (p. ej. CUPOS_INSUFICIENTES)
+else validación correcta
+  TS -> P : aplicarCambioReserva(tx, reservaNueva,\n[D: +N], saldo: -N x precio)
+  activate P
+  P -> BD : BEGIN
+  activate BD
+  P -> BD : UPDATE fecha_evento SET reservas = reservas + N\nWHERE id = D AND reservas + N <= limite
+  P -> BD : UPDATE estudiante SET saldo = saldo - costo\nWHERE id = ? AND saldo >= costo
+  P -> BD : INSERT reserva, INSERT transacciones (CONFIRMADA)
+  P -> BD : COMMIT
+  BD --> P : ok
+  deactivate BD
+  P --> TS : CONFIRMADA
+  deactivate P
+  TS --> C : Reserva + Transaccion
+end
+deactivate TS
+C --> Estudiante : mostrar la reserva
+deactivate C
+
+note right of P
+  Si alguna actualización condicional
+  afecta 0 filas → ROLLBACK, CUPOS_INSUFICIENTES
+  o SALDO_INSUFICIENTE.
+  Protege contra reservas concurrentes.
+end note
+
+@enduml

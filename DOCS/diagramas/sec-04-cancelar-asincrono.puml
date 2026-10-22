@@ -1,0 +1,118 @@
+@startuml sec-04-cancelar-asincrono
+title Secuencia 4 – Cancelar una reserva (asíncrono: guardar primero y luego PUB/SUB)
+
+skinparam shadowing false
+autonumber
+
+actor Estudiante
+participant "Consumidor\nEstudiante\n(REQ)" as C
+participant "broker-\nservicios" as SB
+participant "GestorTransacciones\n(DEALER, PUB)" as TS
+participant "broker-\npersistencia" as PB
+participant "trabajador-\npersistencia" as P
+database "PostgreSQL" as BD
+participant "proxy-cancelaciones\n(XSUB/XPUB)" as X
+participant "trabajador-\ncancelaciones 1 (SUB)" as W1
+participant "trabajador-\ncancelaciones 2 (SUB)" as W2
+
+== Fase 1: guardar y aceptar (síncrono, corto) ==
+
+Estudiante -> C : cancelar la reserva R
+activate C
+C -> C : idSolicitud = nuevoUUID()
+C -> SB : MDPC01 "transacciones"\ncancelarReserva(token, idSolicitud, R)
+SB -> TS : REQUEST
+activate TS
+TS -> TS : validar token → idEstudiante
+TS -> PB : obtenerSolicitudCancelacion(idSolicitud)
+PB -> P : REQUEST
+P -> BD : SELECT
+P --> TS : ninguna
+TS -> PB : obtenerReserva(R)
+PB -> P : REQUEST
+P --> TS : Reserva
+TS -> TS : validar: dueño, ACTIVA,\nfecha no pasada
+
+alt la validación falla
+  TS --> SB : ERROR (código)
+  SB --> C : ERROR
+else validación correcta
+  TS -> PB : aceptarCancelacion(idSolicitud, R, idEstudiante)
+  PB -> P : REQUEST
+  P -> BD : INSERT solicitud_cancelacion (PENDIENTE)
+  alt ya existe una solicitud pendiente para R
+    P --> TS : CANCELACION_PENDIENTE
+    TS --> SB : ERROR CANCELACION_PENDIENTE
+    SB --> C : ERROR
+  else guardada
+    P --> TS : guardada
+    TS --> SB : REPLY ACEPTADA
+    SB --> C : ACEPTADA\n"Tu cancelación está en proceso"
+    TS -> X : PUB ["cancelacion", {idSolicitud}]
+  end
+end
+deactivate TS
+C --> Estudiante : mostrar "cancelación en proceso"
+deactivate C
+
+== Fase 2: crear la cancelación (asíncrono) ==
+
+X -> W1 : ["cancelacion", {idSolicitud}]
+X -> W2 : ["cancelacion", {idSolicitud}]
+
+W1 -> PB : tomarCancelacion(idSolicitud, w1)
+activate W1
+PB -> P : REQUEST
+P -> BD : UPDATE ... SET EN_PROCESO, bloqueo 30 s\nWHERE PENDIENTE
+P --> W1 : tomada (1 fila)
+
+W2 -> PB : tomarCancelacion(idSolicitud, w2)
+activate W2
+PB -> P : REQUEST
+P --> W2 : no tomada (0 filas)
+W2 -> W2 : ignorar
+deactivate W2
+
+W1 -> PB : aplicarCancelacion(tx, idSolicitud)
+PB -> P : REQUEST
+P -> BD : BEGIN
+alt la reserva sigue ACTIVA
+  P -> BD : reserva CANCELADA; fecha_evento − cupos;\nsaldo + montoPagado; INSERT transacciones CONFIRMADA;\nsolicitud_cancelacion COMPLETADA
+  P -> BD : COMMIT
+  P --> W1 : CONFIRMADA
+else ya no se puede cancelar
+  P -> BD : INSERT transacciones FALLIDA; solicitud FALLIDA; COMMIT
+  P --> W1 : FALLIDA
+end
+deactivate W1
+
+== Recuperación: barrido (cada 2 s en cada trabajador) ==
+
+W2 -> PB : tomarCancelacionesPendientes(w2, 50)
+activate W2
+PB -> P : REQUEST
+P -> BD : tomar PENDIENTE con más de 2 s\no EN_PROCESO con bloqueo vencido
+P --> W2 : [] (no se perdió nada)
+deactivate W2
+
+== Fase 3: el estudiante consulta el resultado ==
+
+Estudiante -> C : revisar la cancelación
+activate C
+C -> SB : consultarEstadoSolicitud(token, idSolicitud)
+SB -> TS : REQUEST
+TS -> PB : obtenerSolicitudCancelacion(idSolicitud)
+PB -> P : REQUEST
+P --> TS : COMPLETADA + transacción
+TS --> SB : REPLY CONFIRMADA
+SB --> C : CONFIRMADA
+C --> Estudiante : mostrar el resultado
+deactivate C
+
+note over X, W2
+  ZeroMQ PUB/SUB puede perder la notificación (sin suscriptor,
+  suscriptor tardío, reinicio del proxy). La solicitud guardada
+  + el barrido garantizan que se aplique igual, exactamente una vez (toma).
+end note
+
+@enduml
