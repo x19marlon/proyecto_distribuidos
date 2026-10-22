@@ -105,3 +105,6 @@ across processes and is the source of the performance indicators.
   queue grows.
 - Notify the student (email/push) when the worker finishes a cancellation,
   instead of making them poll `getRequestStatus`.
+
+The full design for these extensions is in
+[fault-tolerance-scalability.md](fault-tolerance-scalability.md).

@@ -26,6 +26,7 @@ Consumers  ──►  Services  ──►  Data Persistence
 | [layers.md](layers.md) | Responsibilities, operations and tables of each layer |
 | [transaction-flow.md](transaction-flow.md) | Step-by-step flows: consult by month, reserve, modify, cancel, event CRUD |
 | [distributed-concerns.md](distributed-concerns.md) | Consistency, concurrency, failures, idempotency |
+| [fault-tolerance-scalability.md](fault-tolerance-scalability.md) | Components and phases to make the system fault tolerant and scalable |
 | [performance-indicators.md](performance-indicators.md) | Performance indicators, the < 1 s target, load-test scenarios |
 | [decisions.md](decisions.md) | Decisions taken and decisions still open |
 | [diagrams/](diagrams/README.md) | UML diagrams (PlantUML): deployment, component, class and sequence diagrams |

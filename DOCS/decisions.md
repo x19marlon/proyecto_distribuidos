@@ -39,7 +39,7 @@ Fill in the "Decision" column once the team agrees.
 | O6 | How are paid events paid? | Prepaid student balance with top-ups (current design), payment recorded without balance | |
 | O7 | Can two events use the same place at the same date/time? | Allowed, blocked | |
 | O8 | Is `department` free text or a fixed list (and is `career` linked to a department)? | Free text, catalog table | |
-| O9 | Replication / fault tolerance in scope? | Yes, no | |
+| O9 | Which fault-tolerance phase is in scope? (see [fault-tolerance-scalability.md](fault-tolerance-scalability.md#6-implementation-phases)) | Phase 1 (proposal), Phase 2, Phase 3 | |
 | O10 | Max spots per reservation? | No limit (only availability), fixed max (e.g. 5) | |
 | O11 | Deadline to modify/cancel? | Until the event date, N hours before | |
 | O12 | Can an admin move a date that already has reservations? | Blocked, allowed (reservations follow the date) | |
@@ -52,3 +52,6 @@ Fill in the "Decision" column once the team agrees.
 | O19 | How do users authenticate? | University SSO/LDAP, own user/password table, no auth (demo only) | |
 | O20 | How do internal processes authenticate? | Mutual TLS, shared secret, network isolation only | |
 | O21 | Encrypt personal data at rest? | Government ID column only, whole disk, no | |
+| O22 | Load balancer | HAProxy, Nginx, client-side list of instances | |
+| O23 | Database failover | Manual (repmgr), automatic (Patroni + etcd) | |
+| O24 | Use a cache for listings? | Redis with short TTL, no cache | |
