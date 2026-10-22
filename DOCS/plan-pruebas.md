@@ -32,7 +32,7 @@ flowchart BT
 | 5. Concurrencia | Sin sobrecupo, sin doble cobro, sin interbloqueos | En cada merge a `main` | Igual que 4 |
 | 6. Inyección de fallos | Las caídas y los mensajes perdidos se enmascaran | Antes de cada entrega | Clúster del laboratorio |
 | 7. Seguridad | Autenticación, autorización, protección de datos | Antes de cada entrega | Igual que 6 |
-| 8. Desempeño | p95 < 1 s, throughput, escalabilidad | Antes de cada entrega y después de cambios grandes | Clúster del laboratorio, siempre el mismo |
+| 8. Desempeño | Escenarios del curso (base vs escalable, sección 10); además p95 < 1 s, throughput, escalabilidad (sección 11) | Antes de cada entrega y después de cambios grandes | Clúster del laboratorio, siempre el mismo |
 
 **Regla:** una funcionalidad está "terminada" cuando tiene pruebas unitarias + de
 extremo a extremo y no rompe las líneas base de concurrencia y desempeño.
@@ -226,9 +226,139 @@ perdidos (debe ser 0) e indicadores durante el fallo.
 
 ---
 
-## 10. Pruebas de desempeño
+## 10. Pruebas de desempeño del curso: arquitectura base vs escalable
 
-### 10.1 Herramientas
+Estas son las pruebas que exige el curso (Tabla 1 del enunciado) y cuyos
+resultados van en el **informe**. Se corren los mismos tres escenarios sobre dos
+arquitecturas y se comparan.
+
+### 10.1 Arquitecturas a comparar
+
+Ambas corren en el mismo clúster de 4 máquinas, con las mismas imágenes y la
+misma configuración; solo cambia la cantidad de réplicas (overlays
+`k8s/overlays/base` y `k8s/overlays/escalable`).
+
+| Componente | Arquitectura base (Fase 0) | Arquitectura escalable (Fase 1) |
+|---|---|---|
+| broker-servicios | 1 | 1 (Binary Star opcional) |
+| gestor-estudiantes | 1 | 2 |
+| gestor-eventos | 1 | 2 |
+| gestor-transacciones | 1 | 3 (uno por nodo) |
+| broker-persistencia | 1 | 1 |
+| trabajador-persistencia | 1 | 3 (uno por nodo) |
+| PostgreSQL | 1 instancia | 2 instancias (primaria + réplica síncrona) |
+| proxy / trabajador-cancelaciones | 1 / 1 | 1 / 2 (no participan en estos escenarios) |
+
+Por qué se espera una diferencia: un worker Majordomo atiende **una solicitud a
+la vez**. En la arquitectura base, todas las solicitudes de todos los clientes se
+encolan en un solo gestor y un solo trabajador de persistencia; en la escalable,
+el broker las reparte entre varias réplicas en paralelo.
+
+### 10.2 Escenarios
+
+| Escenario | Clientes simultáneos | Solo consultan | Consultan y reservan | Reservan y modifican |
+|---|---|---|---|---|
+| **ESC-3** | 3 | 2 | 1 | 0 |
+| **ESC-5** | 5 | 3 | 0 | 2 |
+| **ESC-8** | 8 | 4 | 0 | 4 |
+
+Cada escenario se corre en las dos arquitecturas → **6 combinaciones**, cada una
+**3 veces** → 18 corridas. En el informe se reporta el promedio de las 3 repeticiones.
+
+**Comportamiento de cada tipo de cliente** (ciclo cerrado: cada cliente envía la
+siguiente solicitud apenas recibe la respuesta, sin tiempo de reflexión, para
+medir la capacidad real del sistema):
+
+| Tipo | Ciclo |
+|---|---|
+| **C** – solo consulta | `listarEventosPorMes` (mes al azar entre los 6 con datos) → `obtenerEvento` (un evento al azar de la lista) → repetir |
+| **CR** – consulta y reserva | 2 ciclos de consulta (como C) → `reservar` (1–3 cupos en una fecha al azar) → repetir |
+| **RM** – reserva y modificación | `reservar` (1–3 cupos en una fecha al azar) → `modificarReserva` (cambia la cantidad de cupos o pasa a otra fecha del mismo evento) → siguiente evento → repetir |
+
+Reglas para que los resultados sean comparables:
+
+- Cada cliente es un **proceso separado** con su propio socket `REQ`, corriendo
+  fuera de los nodos worker (máquina adicional o `cp-1`).
+- Cada cliente CR/RM usa su propio grupo de 50 estudiantes, rotándolos, para no
+  chocar con la regla de "una reserva activa por evento".
+- Los lugares de los datos semilla tienen capacidad suficiente para que
+  `CUPOS_INSUFICIENTES` sea raro; si ocurre se cuenta como error de negocio y no
+  entra en los tiempos.
+- La base de datos se reinicia a los datos semilla antes de cada corrida.
+- Duración: **2 min de calentamiento** (no se miden) + **10 min de medición**.
+
+### 10.3 Variables a medir
+
+| # | Variable | Definición | Dónde se mide |
+|---|---|---|---|
+| V1 | Tiempo promedio y desviación estándar de las **consultas** | Media y desviación estándar muestral (n − 1) de la duración de extremo a extremo de `listarEventosPorMes` y `obtenerEvento` con resultado `OK` | Interceptor del consumidor (registros de tiempo con `categoria = CONSULTA`) |
+| V2 | Tiempo promedio y desviación estándar de las **reservas** | Igual, para `reservar` y `modificarReserva` (la modificación cuenta como operación de reserva). También se reporta desglosado: `reservar` vs `modificarReserva` | Interceptor del consumidor (`categoria = RESERVA`) |
+| V3 | **TPM de consultas** | Consultas procesadas con éxito en la ventana de medición ÷ 10 min | **Capa de persistencia**: `idSolicitud` distintos con `categoria = CONSULTA` en los registros de tiempo del trabajador-persistencia (la consulta llega a la BD) |
+| V4 | **TPM de reservas** | Transacciones `RESERVA` + `MODIFICACION` en estado `CONFIRMADA` creadas en la ventana ÷ 10 min | **Base de datos**: consulta SQL sobre la tabla `transacciones` ([recoleccion-metricas.md](recoleccion-metricas.md#6-indicadores-de-uso-sql)) |
+
+Además se registran, sin ser obligatorios: p95, errores por código, CPU por pod y
+las verificaciones de consistencia K-01…K-05 (deben dar 0 en todas las corridas).
+
+### 10.4 Tabla de resultados (va en el informe)
+
+| Escenario | Clientes (C / CR / RM) | Arquitectura | Consultas: promedio (ms) | Consultas: desv. est. (ms) | Reservas: promedio (ms) | Reservas: desv. est. (ms) | TPM consultas | TPM reservas | Errores |
+|---|---|---|---|---|---|---|---|---|---|
+| ESC-3 | 2 / 1 / 0 | Base | | | | | | | |
+| ESC-3 | 2 / 1 / 0 | Escalable | | | | | | | |
+| ESC-5 | 3 / 0 / 2 | Base | | | | | | | |
+| ESC-5 | 3 / 0 / 2 | Escalable | | | | | | | |
+| ESC-8 | 4 / 0 / 4 | Base | | | | | | | |
+| ESC-8 | 4 / 0 / 4 | Escalable | | | | | | | |
+
+Tabla complementaria con las reservas desglosadas:
+
+| Escenario | Arquitectura | `reservar`: promedio / desv. est. (ms) | `modificarReserva`: promedio / desv. est. (ms) | TPM `reservar` | TPM `modificarReserva` |
+|---|---|---|---|---|---|
+| ESC-3 … ESC-8 | Base / Escalable | | | | |
+
+### 10.5 Gráficos
+
+Cada gráfico tiene en el eje X el **número de clientes (3, 5, 8)** y **dos
+líneas: arquitectura base y arquitectura escalable**.
+
+| Gráfico | Eje Y |
+|---|---|
+| G1 | Tiempo promedio de respuesta de las consultas (ms), con barras de error ± 1 desviación estándar |
+| G2 | Tiempo promedio de respuesta de las reservas (ms), con barras de error ± 1 desviación estándar |
+| G3 | TPM de consultas |
+| G4 | TPM de reservas |
+
+Los genera `analizar.py` a partir de `resultados.csv` (una fila por corrida), con
+la misma escala en ambas líneas ([recoleccion-metricas.md](recoleccion-metricas.md#33-script-de-análisis-liviano-vía-a)).
+
+### 10.6 Estructura del informe
+
+1. **Entorno:** máquinas, versiones, configuración de cada arquitectura (tabla 10.1).
+2. **Metodología:** escenarios, tipos de cliente, duración, repeticiones, dónde
+   se mide cada variable (tablas 10.2 y 10.3).
+3. **Resultados:** tabla 10.4 (y la complementaria).
+4. **Gráficos:** G1–G4.
+5. **Análisis y comentarios**, respondiendo como mínimo:
+   - ¿Cómo cambian el tiempo promedio y la desviación al pasar de 3 a 5 a 8 clientes?
+   - ¿La arquitectura escalable mejora el TPM? ¿La mejora es proporcional a las réplicas agregadas?
+   - ¿Por qué las reservas tardan más que las consultas (escritura atómica,
+     bloqueo de fila, replicación síncrona)?
+   - ¿Dónde está el cuello de botella en cada arquitectura (capa con más tiempo
+     según los registros por capa, CPU por pod)?
+   - ¿Se cumplió la meta de p95 < 1 s?
+6. **Conclusiones.**
+
+El informe se guarda en `pruebas/desempeno/informe.md` junto con los datos crudos
+de cada corrida.
+
+---
+
+## 11. Pruebas de desempeño adicionales
+
+Pruebas propias del equipo, además de las del curso, para verificar la meta de
+p95 < 1 s y el comportamiento con mucha más carga.
+
+### 11.1 Herramientas
 
 | Necesidad | Herramienta (propuesta, decisión O17) |
 |---|---|
@@ -239,7 +369,7 @@ perdidos (debe ser 0) e indicadores durante el fallo.
 El generador de carga corre fuera de los 3 nodos worker (una máquina adicional
 del laboratorio, o `cp-1` si no hay otra), nunca en los nodos que se están midiendo.
 
-### 10.2 Mezcla de carga
+### 11.2 Mezcla de carga
 
 Según el comportamiento esperado de los estudiantes (propuesta):
 
@@ -255,7 +385,7 @@ Según el comportamiento esperado de los estudiantes (propuesta):
 
 Cada usuario virtual espera de 1 a 5 s ("tiempo de reflexión") entre acciones.
 
-### 10.3 Tipos de prueba
+### 11.3 Tipos de prueba
 
 | ID | Tipo | Perfil | Duración | Propósito |
 |---|---|---|---|---|
@@ -268,7 +398,7 @@ Cada usuario virtual espera de 1 a 5 s ("tiempo de reflexión") entre acciones.
 | PERF-07 | **Escalabilidad** | PERF-02 con 1, 2 y 3 réplicas de gestor-transacciones | 15 min cada una | Ganancia de throughput por réplica (FT5) |
 | PERF-08 | **Con fallos** | PERF-02 mientras se corre F1 / FT1 / FT2 | 15 min | Tiempo de recuperación del p95 después de un fallo |
 
-### 10.4 Procedimiento de cada corrida
+### 11.4 Procedimiento de cada corrida
 
 1. Reiniciar la base de datos a los datos semilla; reiniciar todos los procesos.
 2. Calentamiento: 2 minutos con carga baja (no se incluye en los resultados).
@@ -280,7 +410,7 @@ Cada usuario virtual espera de 1 a 5 s ("tiempo de reflexión") entre acciones.
    comportamiento bajo carga, recuperación, claridad de los errores).
 7. Comparar con la corrida anterior; cualquier empeoramiento > 20 % del p95 debe explicarse.
 
-### 10.5 Criterios de aceptación
+### 11.5 Criterios de aceptación
 
 | Criterio | Umbral |
 |---|---|
@@ -295,7 +425,7 @@ Cada usuario virtual espera de 1 a 5 s ("tiempo de reflexión") entre acciones.
 
 ---
 
-## 11. Matriz de trazabilidad
+## 12. Matriz de trazabilidad
 
 | Requisito | Pruebas |
 |---|---|
@@ -313,7 +443,8 @@ Cada usuario virtual espera de 1 a 5 s ("tiempo de reflexión") entre acciones.
 | RNF-06 (cancelación asíncrona durable, exactamente una vez) | IT-06, IT-10 … IT-12; F3, F4, F7; PERF-06 |
 | RNF-07 (< 1 s) | PERF-01 … PERF-08 |
 | RNF-08 (visibilidad del desempeño) | Pruebas unitarias de métricas; `obtenerMetricas` verificado después de cada PERF |
-| RNF-09 (evaluación del desempeño) | Procedimiento de 10.4 + evaluación cualitativa |
+| RNF-09 (evaluación del desempeño) | Procedimiento de 11.4 + evaluación cualitativa |
+| RNF-15 (comparación base vs escalable) | ESC-3, ESC-5, ESC-8 en ambas arquitecturas (sección 10) |
 | RNF-10, RNF-11 (seguridad) | SEC-01 … SEC-12 |
 | RNF-12 (tolerancia a fallos) | F1 … F10; FT1 … FT8 |
 | RNF-13 (ZeroMQ) | Pruebas de contrato sobre las tramas MDP; IT-13; F9, F10 |
@@ -321,7 +452,7 @@ Cada usuario virtual espera de 1 a 5 s ("tiempo de reflexión") entre acciones.
 
 ---
 
-## 12. Organización
+## 13. Organización
 
 | Ítem | Plan |
 |---|---|

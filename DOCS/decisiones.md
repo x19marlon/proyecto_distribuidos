@@ -31,6 +31,10 @@
 | D25 | Cifrado y autenticación interna con CurveZMQ (reemplaza TLS) | ZeroMQ no usa TLS |
 | D26 | Todo el proyecto (documentación, diagramas, nombres de clases, operaciones, códigos de error y código) se escribe en español | Requisito del curso |
 | D27 | La clase de servicio que administra reservas, modificaciones, cancelaciones y recargas se llama `GestorTransacciones` (servicio ZeroMQ `transacciones`, pod `gestor-transacciones`) | Requisito del proyecto |
+| D28 | Para las métricas del curso, `modificarReserva` cuenta como operación de reserva (tiempos y TPM), y además se reporta desglosada | Los escenarios de 5 y 8 clientes mezclan reservas y modificaciones |
+| D29 | Arquitectura base = Fase 0 (una réplica de cada componente); arquitectura escalable = Fase 1 (réplicas de gestores y trabajadores de persistencia, PostgreSQL con réplica) | Permite comparar en el mismo clúster cambiando solo las réplicas |
+| D30 | Tiempos de respuesta medidos del lado del consumidor; TPM de consultas en la capa de persistencia y TPM de reservas en la BD (tabla `transacciones`) | El enunciado permite medir en el gestor de transacciones o en la BD; las consultas no pasan por `GestorTransacciones` |
+| D31 | Los clientes de los escenarios del curso funcionan en ciclo cerrado, sin tiempo de reflexión: 2 min de calentamiento + 10 min de medición, 3 repeticiones | Mide la capacidad real con pocos clientes y da resultados repetibles |
 
 ## Pendientes
 
@@ -46,7 +50,7 @@ Llenar la columna "Decisión" cuando el equipo se ponga de acuerdo.
 | O6 | ¿Cómo se pagan los eventos pagos? | Saldo prepagado del estudiante con recargas (diseño actual), pago registrado sin saldo | |
 | O7 | ¿Dos eventos pueden usar el mismo lugar en la misma fecha y hora? | Permitido, bloqueado | |
 | O8 | ¿El `departamento` es texto libre o una lista fija (y la `carrera` está ligada a un departamento)? | Texto libre, tabla de catálogo | |
-| O9 | ¿Qué fase de tolerancia a fallos entra en el alcance? (ver [tolerancia-fallos-escalabilidad.md](tolerancia-fallos-escalabilidad.md#6-fases-de-implementación)) | Fase 1 (propuesta), Fase 2, Fase 3 | |
+| O9 | ¿Qué fase de tolerancia a fallos entra en el alcance? (ver [tolerancia-fallos-escalabilidad.md](tolerancia-fallos-escalabilidad.md#6-fases-de-implementación)) | Al menos Fase 1 (es la arquitectura escalable, D29); Fase 2 opcional | Fase 1 mínimo |
 | O10 | ¿Máximo de cupos por reserva? | Sin límite (solo disponibilidad), máximo fijo (p. ej. 5) | |
 | O11 | ¿Plazo para modificar/cancelar? | Hasta la fecha del evento, N horas antes | |
 | O12 | ¿Un administrador puede mover una fecha que ya tiene reservas? | Bloqueado, permitido (las reservas siguen a la fecha) | |
@@ -54,7 +58,7 @@ Llenar la columna "Decisión" cuando el equipo se ponga de acuerdo.
 | O14 | Mientras una cancelación está pendiente, ¿se puede modificar la reserva? | Bloqueado con `CANCELACION_PENDIENTE` (diseño actual), permitido (la cancelación aplica al último estado) | |
 | O15 | ¿Cómo se entera el estudiante del resultado final? | Consulta `consultarEstadoSolicitud` (diseño actual), notificación push / correo | |
 | O16 | Herramienta de métricas (ver [recoleccion-metricas.md](recoleccion-metricas.md)) | Vía A: registros de tiempo JSON + script de análisis; Vía B: A + Prometheus, Grafana, exportadores, OpenTelemetry/Jaeger (recomendado: A desde el inicio, B antes de las pruebas de fallos) | |
-| O17 | Herramienta de pruebas de carga | JMeter, Locust, k6, script propio | |
+| O17 | Herramienta de pruebas de carga | Script propio en el lenguaje del proyecto con un proceso por cliente (recomendado: solo son 3–8 clientes y hablan ZeroMQ), Locust con cliente ZeroMQ, k6 | |
 | O18 | ¿Basta con p95 < 1 s, o debe ser p99 / todas las transacciones? | p95, p99, máximo | |
 | O19 | ¿Cómo se autentican los usuarios? | SSO/LDAP de la universidad, tabla propia de usuarios/contraseñas, sin autenticación (solo demo) | |
 | O20 | ¿Cómo se autentican los procesos internos? | Llaves CurveZMQ + manejador ZAP (propuesta), solo aislamiento de red | |

@@ -98,13 +98,20 @@ Una línea JSON por solicitud y por capa (escrita de forma asíncrona, ver 2.5):
 
 ```json
 {"idSolicitud":"r-123","idTraza":"7f3a…","capa":"SERVICIOS","instancia":"gestor-transacciones-1",
- "operacion":"reservar","inicio":"2026-10-22T15:04:05.123Z","duracionMs":182.4,
- "resultado":"OK","idEstudiante":"20231234"}
+ "operacion":"reservar","categoria":"RESERVA","inicio":"2026-10-22T15:04:05.123Z",
+ "duracionMs":182.4,"resultado":"OK","idEstudiante":"20231234",
+ "escenario":"ESC-5","arquitectura":"escalable"}
 ```
 
 - **Nunca** incluye número de documento, teléfono, correo ni nombres (modelo de seguridad 4.4).
 - `inicio` es hora de reloj de pared (para ordenar la línea de tiempo);
   `duracionMs` se mide con el reloj **monotónico** (inmune a los ajustes de NTP).
+- `categoria` agrupa las operaciones para los requisitos del curso: `CONSULTA`
+  (`listarEventosPorMes`, `obtenerEvento`), `RESERVA` (`reservar`,
+  `modificarReserva`) u `OTRA`. La pone el consumidor y viaja en la solicitud
+  hasta la persistencia.
+- `escenario` y `arquitectura` salen de la configuración de la corrida, para
+  poder juntar todas las corridas en un solo análisis.
 - La misma estructura se guarda en la clase `RegistroTiempo`
   ([diagramas/clases.puml](diagramas/clases.puml)).
 
@@ -120,8 +127,8 @@ Siguiendo las convenciones de Prometheus:
 
 | Métrica | Tipo | Etiquetas | Da los indicadores |
 |---|---|---|---|
-| `duracion_solicitud_segundos` | Histograma | `capa`, `operacion`, `resultado` | L-01…L-06, L-02 (% < 1 s), T-01 |
-| `solicitudes_total` | Contador | `capa`, `operacion`, `resultado` | T-01, E-01, E-02 |
+| `duracion_solicitud_segundos` | Histograma | `capa`, `operacion`, `categoria`, `resultado` | L-01…L-09 (el histograma da también `_sum`/`_count` para el promedio), T-01 |
+| `solicitudes_total` | Contador | `capa`, `operacion`, `categoria`, `resultado` | T-01, T-05, T-06, E-01, E-02 |
 | `duracion_llamada_segundos` | Histograma | `desde`, `hacia`, `operacion` | L-03…L-05 (tiempo por salto) |
 | `timeouts_total` | Contador | `desde`, `hacia` | E-03 |
 | `reintentos_total` | Contador | `operacion` | E-04 |
@@ -210,11 +217,23 @@ Pasos:
 
 1. Cargar todos los registros de tiempo en un DataFrame de pandas.
 2. Quitar el periodo de calentamiento.
-3. Por `operacion` y `capa`: conteo, p50, p95, p99, máx, % < 1000 ms.
-4. Unir por `idSolicitud`: tiempo de red por salto = duración de quien llama − duración de quien es llamado.
-5. Tasa de errores por código; throughput por segundo.
-6. Salida: tabla Markdown (se pega en la plantilla de resultados), CSV y gráficas
-   PNG (latencia en el tiempo con la línea de 1 s, histograma).
+3. Por `categoria` (CONSULTA / RESERVA) y por `operacion`, del lado del
+   consumidor: **promedio y desviación estándar muestral** (requisito del curso),
+   además de p50, p95, p99, máx y % < 1000 ms.
+4. **TPM de consultas:** `idSolicitud` distintos con `categoria = CONSULTA` y
+   resultado `OK` en los registros de la capa `PERSISTENCIA` ÷ minutos de medición.
+   **TPM de reservas:** se toma de la consulta SQL de la sección 6 y se compara
+   con el conteo de los registros (deben coincidir).
+5. Unir por `idSolicitud`: tiempo de red por salto = duración de quien llama − duración de quien es llamado.
+6. Tasa de errores por código; throughput por segundo.
+7. Agregar una fila por corrida a `resultados.csv` (escenario, arquitectura,
+   repetición, V1–V4) y promediar las repeticiones.
+8. Salida: la tabla de resultados del informe
+   ([plan-pruebas.md](plan-pruebas.md#104-tabla-de-resultados-va-en-el-informe)),
+   los gráficos **G1–G4** con matplotlib (variable vs número de clientes, una
+   línea para la arquitectura base y otra para la escalable, barras de error
+   ± desviación estándar en G1 y G2), y las gráficas de latencia en el tiempo e
+   histogramas.
 
 ---
 
@@ -297,6 +316,19 @@ ORDER BY ocupacion_pct DESC;
 SELECT DATE_TRUNC('month', creado_en) AS mes, COUNT(*)
 FROM transacciones WHERE tipo = 'RESERVA' AND estado = 'CONFIRMADA'
 GROUP BY 1 ORDER BY 1;
+
+-- TPM de reservas (requisito del curso): reservas + modificaciones confirmadas
+-- por minuto dentro de la ventana de medición de la corrida
+SELECT date_trunc('minute', creado_en) AS minuto,
+       COUNT(*) FILTER (WHERE tipo = 'RESERVA')      AS reservas,
+       COUNT(*) FILTER (WHERE tipo = 'MODIFICACION') AS modificaciones,
+       COUNT(*)                                      AS tpm_reservas
+FROM transacciones
+WHERE estado = 'CONFIRMADA'
+  AND tipo IN ('RESERVA', 'MODIFICACION')
+  AND creado_en BETWEEN :inicio_medicion AND :fin_medicion
+GROUP BY 1 ORDER BY 1;
+-- TPM promedio de la corrida = COUNT(*) total ÷ minutos de medición
 
 -- U-03 / U-04 Tasas de cancelación y de modificación
 SELECT

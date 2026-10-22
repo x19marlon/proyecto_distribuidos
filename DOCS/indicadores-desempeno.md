@@ -56,6 +56,8 @@ duraciones medidas en la misma máquina, nunca marcas de tiempo de dos relojes d
 | L-05 | Tiempo de red por salto | Extremo a extremo − tiempo de la capa interna | p95 < 100 ms | Ajustar la serialización (O28), acercar los procesos |
 | L-06 | Tiempo de aceptación de una cancelación | Tiempo hasta `ACEPTADA` | p95 < 1 s | Velocidad para guardar la solicitud (persistencia) |
 | L-07 | Tiempo de finalización de una cancelación | `confirmadaEn − aceptadaEn` | p95 < 1 s, máx < 10 s | Cantidad de trabajadores |
+| L-08 | **Tiempo promedio y desviación estándar de las consultas** (requisito del curso) | Media y desviación estándar muestral de `listarEventosPorMes` + `obtenerEvento` (lado del consumidor, solo `OK`) | Se compara base vs escalable | Si la arquitectura escalable reduce el tiempo de consulta |
+| L-09 | **Tiempo promedio y desviación estándar de las reservas** (requisito del curso) | Igual, para `reservar` + `modificarReserva` (también desglosado) | Se compara base vs escalable | Si la arquitectura escalable reduce el tiempo de reserva |
 
 ### 2. Throughput y carga
 
@@ -65,6 +67,8 @@ duraciones medidas en la misma máquina, nunca marcas de tiempo de dos relojes d
 | T-02 | Throughput máximo sostenido con p95 < 1 s | Prueba de carga, subir la carga hasta que L-01 se rompa | Valor documentado | Cuántos estudiantes soporta el sistema a la vez |
 | T-03 | Usuarios concurrentes / conexiones abiertas | Conexiones activas en el servicio | — | Tamaño de los pools de hilos y de conexiones |
 | T-04 | Reservas por minuto en el pico | Conteo de transacciones `RESERVA` | — | Escalar la capa de servicios (más instancias) |
+| T-05 | **TPM de consultas** (requisito del curso) | Consultas procesadas con éxito por minuto, contadas en la capa de persistencia | Se compara base vs escalable | Capacidad de lectura de cada arquitectura |
+| T-06 | **TPM de reservas** (requisito del curso) | Transacciones `RESERVA` + `MODIFICACION` `CONFIRMADA` por minuto, contadas en la BD | Se compara base vs escalable | Capacidad de escritura de cada arquitectura |
 
 ### 3. Cancelaciones asíncronas (solicitudes pendientes)
 
@@ -157,7 +161,14 @@ servicios, que agrega por `idSolicitud` los registros de tiempo de las tres capa
 Las opciones de herramientas están en [decisiones.md](decisiones.md) (O16) y en
 [recoleccion-metricas.md](recoleccion-metricas.md).
 
-## Escenarios de prueba de carga
+## Escenarios de prueba del curso
+
+Los escenarios obligatorios (3, 5 y 8 clientes simultáneos, en la arquitectura
+base y en la escalable) con L-08, L-09, T-05 y T-06 están definidos en
+[plan-pruebas.md](plan-pruebas.md#10-pruebas-de-desempeño-del-curso-arquitectura-base-vs-escalable),
+junto con la tabla de resultados y los gráficos que van en el informe.
+
+## Escenarios de prueba de carga adicionales
 
 Para evaluar los indicadores, correr estos escenarios y registrar los resultados:
 
@@ -172,6 +183,10 @@ Para evaluar los indicadores, correr estos escenarios y registrar los resultados
 | S7 | Subir la carga hasta que p95 > 1 s | T-02 |
 
 ## Plantilla de resultados
+
+Para los escenarios del curso se usa la tabla de
+[plan-pruebas.md](plan-pruebas.md#104-tabla-de-resultados-va-en-el-informe).
+Para las pruebas adicionales:
 
 | Fecha | Escenario | Carga | p50 | p95 | p99 | máx | % < 1 s | Errores % | Máx. cancel. pendientes | Consistencia | Notas |
 |---|---|---|---|---|---|---|---|---|---|---|---|
