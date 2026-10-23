@@ -1,0 +1,139 @@
+% Informe – Primera entrega
+% Sistema distribuido de transacciones para eventos universitarios
+%
+% Compilar en Overleaf con pdfLaTeX (Menu → Compiler → pdfLaTeX).
+\documentclass[11pt,letterpaper]{article}
+
+% ------------------------------------------------------------------ Idioma y fuentes
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% ------------------------------------------------------------------ Página
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=*}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+
+% ------------------------------------------------------------------ Tablas, figuras y código
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{rotating}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{array}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\renewcommand{\arraystretch}{1.18}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{amsmath}
+
+% ------------------------------------------------------------------ Diagramas
+\usepackage{tikz}
+\usetikzlibrary{babel, positioning, arrows.meta, shapes.geometric, shapes.multipart,
+                fit, backgrounds, calc, shadows}
+\usepackage{pgf-umlsd}
+\usepackage{pgf-umlcd}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\usepackage[hidelinks]{hyperref}
+
+% ------------------------------------------------------------------ Estilo
+\definecolor{azul}{RGB}{31,78,121}
+\definecolor{azulclaro}{RGB}{222,235,247}
+\definecolor{naranja}{RGB}{237,125,49}
+\definecolor{verde}{RGB}{146,208,80}
+\definecolor{morado}{RGB}{112,48,160}
+\definecolor{gris}{RGB}{110,110,110}
+
+\titleformat{\section}{\Large\bfseries\color{azul}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries\color{azul}}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{0.6em}{}
+
+\lstset{basicstyle=\ttfamily\small, columns=fullflexible, keepspaces=true,
+        frame=single, rulecolor=\color{gris!50}, backgroundcolor=\color{gris!6},
+        breaklines=true, showstringspaces=false,
+        literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small Sistemas Distribuidos – Primera entrega}
+\rhead{\small Eventos universitarios}
+\cfoot{\thepage}
+
+\newcommand{\codigo}[1]{\texttt{#1}}
+
+% ------------------------------------------------------------------ Datos de la portada (completar)
+\newcommand{\universidad}{Nombre de la universidad}
+\newcommand{\curso}{Sistemas Distribuidos}
+\newcommand{\profesor}{Nombre del profesor}
+\newcommand{\repositorio}{\url{https://github.com/x19marlon/proyecto_distribuidos}}
+
+\begin{document}
+
+% ------------------------------------------------------------------ Portada
+\begin{titlepage}
+    \centering
+    {\large \universidad\par}
+    \vspace{0.3cm}
+    {\large \curso\par}
+    \vspace{3cm}
+    {\color{azul}\rule{\linewidth}{1.2pt}\par}
+    \vspace{0.4cm}
+    {\Huge\bfseries Sistema distribuido de transacciones\\[0.2cm] para eventos universitarios\par}
+    \vspace{0.4cm}
+    {\Large Primera entrega: modelos, diseño y plan de pruebas\par}
+    \vspace{0.2cm}
+    {\color{azul}\rule{\linewidth}{1.2pt}\par}
+    \vspace{2.5cm}
+    {\large Equipo \textbf{crotolamo que gico}\par}
+    \vspace{0.6cm}
+    \begin{tabular}{c}
+        mariananvv16 \\
+        martinezm-oe \\
+        Nick\_07 \\
+        x19marlon
+    \end{tabular}
+    \vfill
+    {\large Profesor: \profesor\par}
+    \vspace{0.3cm}
+    {\large \today\par}
+    \vspace{0.3cm}
+    {\small Repositorio: \repositorio\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\input{secciones/01-introduccion}
+\input{secciones/02-modelos}
+\input{secciones/03-diseno}
+\input{secciones/04-escalabilidad}
+\input{secciones/05-pruebas}
+\input{secciones/06-metricas}
+\input{secciones/07-carga}
+\input{secciones/08-implementacion}
+
+\begin{thebibliography}{9}
+\bibitem{coulouris} G. Coulouris, J. Dollimore, T. Kindberg y G. Blair.
+    \textit{Distributed Systems: Concepts and Design}, 5.\textsuperscript{a} ed. Addison-Wesley, 2011.
+\bibitem{tanenbaum} A. S. Tanenbaum y M. van Steen.
+    \textit{Distributed Systems}, 4.\textsuperscript{a} ed. distributed-systems.net, 2023.
+\bibitem{zguide} P. Hintjens. \textit{ZeroMQ: Messaging for Many Applications}. O'Reilly, 2013.
+    Guía en línea: \url{https://zguide.zeromq.org}.
+\bibitem{cppzmq} cppzmq – enlace C++ de cabecera para libzmq. \url{https://github.com/zeromq/cppzmq}.
+\bibitem{rfc7} ZeroMQ RFC 7/MDP – Majordomo Protocol. \url{https://rfc.zeromq.org/spec/7/}.
+\bibitem{ley1581} Congreso de Colombia. Ley Estatutaria 1581 de 2012 (protección de datos personales).
+\end{thebibliography}
+
+\end{document}

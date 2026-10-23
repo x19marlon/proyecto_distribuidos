@@ -1,0 +1,63 @@
+\section{Implementación de la primera entrega}
+\label{sec:implementacion}
+
+\subsection{Alcance}
+
+Se implementaron en C++17 orientado a objetos, con ZeroMQ, los componentes de la
+arquitectura base con las operaciones de \textbf{consulta de eventos del mes} y
+\textbf{reserva de cupos}:
+
+\begin{table}[H]
+\centering
+\caption{Componentes implementados.}
+\begin{tabularx}{\textwidth}{p{3.8cm}p{4.6cm}Y}
+\toprule
+Componente (Figura~\ref{fig:arquitectura-basica}) & Ejecutable & Clases \\
+\midrule
+Clientes & \codigo{bin/cliente} & \codigo{Cliente}, \codigo{ConsolaCliente} \\
+Gestor de Transacciones & \codigo{bin/gestor-transacciones} & \codigo{GestorTransacciones} \\
+Procesamiento RMC & \codigo{bin/procesador-rmc} & \codigo{ProcesadorRMC} \\
+Servicio de Persistencia & \codigo{bin/persistencia} & \codigo{ServicioPersistencia},
+\codigo{BaseDatos}, \codigo{AlmacenamientoArchivo}, modelo de dominio \\
+Común & — & \codigo{Servicio}, \codigo{Mensaje}, \codigo{ClienteConfiable} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+El componente de Cancelación de reservas está diseñado (sección~\ref{sec:diseno})
+pero no se implementó, porque esta entrega solo incluye consulta y reserva. Aunque
+la tolerancia a fallos no se exigía, el código ya incluye los reintentos
+\emph{Lazy Pirate}, los latidos entre gestor y procesadores y las reservas
+idempotentes, porque son la base de la segunda entrega.
+
+Persistencia guarda los datos en memoria y escribe cada reserva en un archivo de
+bitácora antes de responder; al arrancar vuelve a aplicar la bitácora. Arranca con
+datos de ejemplo: cuatro eventos en noviembre y diciembre de 2026 (en el Teatro
+Mayor, una sala de 5 cupos, un auditorio y un lugar externo) y los estudiantes
+\codigo{EST-1}, \codigo{EST-2} y \codigo{EST-3}.
+
+\subsection{Compilación y ejecución}
+
+\begin{lstlisting}
+sudo apt install g++ make libzmq3-dev cppzmq-dev
+make
+scripts/iniciar_sistema.sh base      # o "escalable" (3 procesadores RMC)
+bin/cliente EST-1                    # menu: 1 consultar mes, 2 reservar
+scripts/detener_sistema.sh
+\end{lstlisting}
+
+Para ejecutar en varias máquinas se indican las direcciones con variables de
+entorno (\codigo{GESTOR\_ENDPOINT}, \codigo{GESTOR\_BACKEND},
+\codigo{PERSISTENCIA\_ENDPOINT}, etc.). El código fuente y el README están en el
+repositorio: \repositorio.
+
+\subsection{Verificación realizada}
+
+\begin{itemize}
+    \item Consulta del mes \codigo{2026-11}: lista las fechas con cupos y precios.
+    \item Errores: fecha inexistente, cupos en 0, mes mal escrito, estudiante no
+          registrado y reserva duplicada.
+    \item Tres estudiantes pidieron 2 cupos al mismo tiempo en la sala de 5: dos
+          reservas se crearon y la tercera recibió \codigo{CUPOS\_INSUFICIENTES}.
+    \item Tras reiniciar persistencia, las reservas se conservaron.
+\end{itemize}

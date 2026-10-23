@@ -1,0 +1,88 @@
+% Diagrama de componentes UML – arquitectura base
+\begin{tikzpicture}[
+    font=\small,
+    componente/.style={draw, thick, fill=white, minimum width=4.4cm, minimum height=1.5cm,
+                       align=center, inner sep=4pt},
+    capa/.style={draw=gris, dashed, rounded corners=4pt, inner sep=0.45cm},
+    nombrecapa/.style={font=\footnotesize\bfseries, text=gris, anchor=north west},
+    interfaz/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt},
+]
+    % Icono de componente UML en la esquina superior derecha del nodo
+    \newcommand{\icono}[1]{%
+        \draw[fill=white] ($(#1.north east)+(-0.55,-0.18)$) rectangle ++(0.36,-0.42);
+        \draw[fill=white] ($(#1.north east)+(-0.63,-0.27)$) rectangle ++(0.16,-0.08);
+        \draw[fill=white] ($(#1.north east)+(-0.63,-0.44)$) rectangle ++(0.16,-0.08);}
+    % Conector de ensamblaje vertical: #1 requiere (arriba), #2 provee (abajo), #3 punto, #4 nombre
+    \newcommand{\ensambleV}[4]{%
+        \draw[thick] (#2) -- (#3);
+        \draw[thick, fill=white] (#3) circle (0.14);
+        \draw[thick] (#1) -- ($(#3)+(0,0.26)$);
+        \draw[thick] ($(#3)+(0.26,0)$) arc (0:180:0.26);
+        \node[interfaz, right=0.32cm of #3] {#4};}
+
+    % ---------------- Consumidores
+    \node[componente, fill=morado!12] (cli) at (0,0)
+        {\guillemotleft component\guillemotright\\\textbf{Cliente}\\\scriptsize \codigo{Cliente}, \codigo{ConsolaCliente}};
+
+    % ---------------- Negocio
+    \node[componente, fill=naranja!20] (ges) at (0,-3.6)
+        {\guillemotleft component\guillemotright\\\textbf{Gestor de Transacciones}\\\scriptsize \codigo{GestorTransacciones}};
+    \node[componente, fill=azul!15] (rmc) at (-3.4,-7.4)
+        {\guillemotleft component\guillemotright\\\textbf{Procesamiento RMC}\\\scriptsize \codigo{ProcesadorRMC}};
+    \node[componente, fill=verde!25] (can) at (3.4,-7.4)
+        {\guillemotleft component\guillemotright\\\textbf{Cancelación de reservas}\\\scriptsize \codigo{ServicioCancelacion}};
+
+    % ---------------- Almacenamiento
+    \node[componente, fill=azul!25, minimum width=6.5cm] (per) at (0,-11.4)
+        {\guillemotleft component\guillemotright\\\textbf{Servicio de Persistencia}\\\scriptsize \codigo{ServicioPersistencia}, \codigo{BaseDatos}, \codigo{Almacenamiento}};
+
+    \foreach \c in {cli, ges, rmc, can, per} {\icono{\c}}
+
+    % ---------------- Interfaces
+    % Cliente requiere ISolicitudes (provista por el gestor)
+    \coordinate (i1) at (0,-1.85);
+    \ensambleV{cli.south}{ges.north}{i1}{\codigo{ISolicitudes}\\ROUTER :5555};
+
+    % Gestor requiere IProcesamiento (provista por los procesadores RMC)
+    \coordinate (i2) at (-3.4,-5.6);
+    \draw[thick] (rmc.north) -- (i2);
+    \draw[thick, fill=white] (i2) circle (0.14);
+    \draw[thick] (ges.south west) ++(0.8,0) |- ($(i2)+(0,0.9)$) -- ($(i2)+(0,0.26)$);
+    \draw[thick] ($(i2)+(0.26,0)$) arc (0:180:0.26);
+    \node[interfaz, left=0.32cm of i2] {\codigo{IProcesamiento}\\ROUTER :5556 / DEALER};
+
+    % Cancelación requiere IAvisosCancelacion (provista por el gestor, PUB)
+    \coordinate (i3) at (3.4,-5.6);
+    \draw[thick] (ges.south east) ++(-0.8,0) |- ($(i3)+(0,0.9)$) -- (i3);
+    \draw[thick, fill=white] (i3) circle (0.14);
+    \draw[thick] (can.north) -- ($(i3)+(0,-0.26)$);
+    \draw[thick] ($(i3)+(-0.26,0)$) arc (180:360:0.26);
+    \node[interfaz, right=0.32cm of i3] {\codigo{IAvisosCancelacion}\\PUB :5557 / SUB};
+
+    % Cliente requiere INotificaciones (provista por cancelación, PUB)
+    \coordinate (i4) at (6.6,0);
+    \draw[thick, dashed] (can.east) -| (i4);
+    \draw[thick, fill=white] (i4) circle (0.14);
+    \draw[thick, dashed] (cli.east) -- ($(i4)+(-0.26,0)$);
+    \draw[thick] ($(i4)+(0,0.26)$) arc (90:270:0.26);
+    \node[interfaz, above=0.3cm of i4] {\codigo{INotificaciones}\\PUB :5558 / SUB};
+
+    % RMC y cancelación requieren IPersistencia
+    \coordinate (i5) at (0,-9.6);
+    \draw[thick] (per.north) -- (i5);
+    \draw[thick, fill=white] (i5) circle (0.14);
+    \draw[thick] (rmc.south) |- ($(i5)+(-0.6,0.5)$) -- ($(i5)+(0,0.5)$) -- ($(i5)+(0,0.26)$);
+    \draw[thick] (can.south) |- ($(i5)+(0.6,0.5)$) -- ($(i5)+(0,0.5)$);
+    \draw[thick] ($(i5)+(0.26,0)$) arc (0:180:0.26);
+    \node[interfaz, right=0.32cm of i5] {\codigo{IPersistencia}\\REP :5560};
+
+    % ---------------- Capas
+    \begin{scope}[on background layer]
+        \node[capa, fit=(cli)] (c1) {};
+        \node[nombrecapa] at (c1.north west) {Capa de consumidores};
+        \node[capa, fit=(ges)(rmc)(can)] (c2) {};
+        \node[nombrecapa] at (c2.north west) {Capa de Servicios de Negocio};
+        \node[capa, fit=(per)] (c3) {};
+        \node[nombrecapa] at (c3.north west) {Capa de Servicios de Almacenamiento};
+    \end{scope}
+\end{tikzpicture}

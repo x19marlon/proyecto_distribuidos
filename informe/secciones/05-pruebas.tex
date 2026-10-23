@@ -1,0 +1,175 @@
+\section{Protocolo de pruebas}
+\label{sec:pruebas}
+
+El protocolo cubre los tipos de prueba de un sistema informático, desde las piezas
+aisladas hasta el sistema completo bajo carga y fallos. Las pruebas se ejecutan en
+este orden: si un nivel falla, no se avanza al siguiente.
+
+\subsection{Tipos de prueba, herramientas y criterios}
+
+\begin{longtable}{p{3.0cm}p{5.6cm}p{3.2cm}p{3.5cm}}
+\caption{Tipos de prueba.}\\
+\toprule
+Tipo & Qué verifica & Herramientas & Cuándo \\
+\midrule
+\endfirsthead
+\toprule
+Tipo & Qué verifica & Herramientas & Cuándo \\
+\midrule
+\endhead
+Análisis estático & Errores de programación sin ejecutar: variables sin usar,
+conversiones peligrosas, estilo. & \codigo{g++ -Wall -Wextra}, \codigo{cppcheck},
+\codigo{clang-tidy} & En cada compilación \\
+Unitarias & Cada clase por separado: \codigo{Mensaje} (serializar y deserializar),
+\codigo{FechaEvento} (\codigo{hayCupo}), \codigo{BaseDatos} (reglas de reserva),
+\codigo{AlmacenamientoArchivo} (bitácora). & GoogleTest & En cada cambio \\
+Integración & Dos componentes reales juntos: RMC $\leftrightarrow$ persistencia,
+gestor $\leftrightarrow$ RMC, reconstrucción desde la bitácora. & GoogleTest + procesos
+reales en una máquina & En cada cambio \\
+Protocolo (contrato) & Cada proceso envía y acepta exactamente las tramas y campos
+acordados; errores ante mensajes mal formados. & Cliente de prueba con cppzmq & En
+cada cambio \\
+Funcionales (extremo a extremo) & Cada requisito funcional a través de las tres
+capas (Tabla~\ref{tab:e2e}). & \codigo{bin/cliente} con guiones de entrada + script
+\codigo{bash} & Antes de cada entrega \\
+Concurrencia y consistencia & Sin sobrecupo, sin reservas duplicadas, contadores
+iguales a la suma de reservas. & Varios clientes simultáneos & Antes de cada entrega \\
+Regresión & Lo que funcionaba sigue funcionando después de un cambio. & Repetir las
+suites anteriores & En cada \emph{merge} a \codigo{develop} \\
+Desempeño (Tabla~1) & Tiempo promedio, desviación estándar y TPM de consultas y
+reservas con 3, 5 y 8 clientes, base frente a escalable. & Sección~\ref{sec:metricas}
+y \ref{sec:carga} & Entrega final \\
+Carga, estrés y resistencia & Meta de p95 < 1\,s, punto de saturación y
+estabilidad durante horas (fugas de memoria). & Generador de carga, \codigo{pidstat},
+Valgrind & Entrega final \\
+Escalabilidad & Ganancia de TPM al pasar de 1 a 2 y 3 procesadores RMC. &
+Generador de carga & Entrega final \\
+Inyección de fallos & Caídas y mensajes perdidos se enmascaran
+(Tabla~\ref{tab:fallos}). & \codigo{kill}, \codigo{tc netem}, \codigo{iptables} &
+Entrega final \\
+Seguridad & Validación de entradas, propiedad de las reservas, repetición de
+mensajes, tráfico cifrado. & Cliente de prueba, Wireshark & Entrega final \\
+Despliegue e instalación & El sistema se compila y arranca en máquinas limpias
+siguiendo el README. & \codigo{make}, scripts, Kubernetes & Antes de cada entrega \\
+Aceptación y usabilidad & Un estudiante completa consulta y reserva sin ayuda; los
+mensajes son claros. & Sesión guiada con usuarios & Entrega final \\
+\bottomrule
+\end{longtable}
+
+\subsection{Casos funcionales}
+
+\begin{longtable}{p{1.4cm}p{6.6cm}p{7.3cm}}
+\caption{Casos de prueba funcionales de extremo a extremo.}
+\label{tab:e2e}\\
+\toprule
+ID & Caso & Resultado esperado \\
+\midrule
+\endfirsthead
+\toprule
+ID & Caso & Resultado esperado \\
+\midrule
+\endhead
+F-01 & Consultar un mes con eventos (\codigo{2026-11}). & Solo fechas de ese mes, en
+orden, con lugar, precio, límite, reservas y disponibles. \\
+F-02 & Consultar un mes sin eventos. & Lista vacía, sin error. \\
+F-03 & Consultar con un mes mal escrito (\codigo{2026-13}). & \codigo{DATOS\_INVALIDOS}. \\
+F-04 & Reservar 2 cupos en una fecha con cupo. & Reserva creada; los disponibles
+bajan en 2; se registra una transacción. \\
+F-05 & Reservar más cupos de los disponibles. & \codigo{CUPOS\_INSUFICIENTES}; nada
+cambia. \\
+F-06 & Reservar exactamente los cupos restantes y luego uno más. & La primera
+funciona; la segunda \codigo{CUPOS\_INSUFICIENTES}. \\
+F-07 & Segunda reserva del mismo estudiante en el mismo evento. &
+\codigo{RESERVA\_DUPLICADA}. \\
+F-08 & Reservar con cupos 0 o negativos, o una fecha inexistente. &
+\codigo{DATOS\_INVALIDOS} / \codigo{FECHA\_NO\_EXISTE}. \\
+F-09 & Reservar con un estudiante no registrado. & \codigo{ESTUDIANTE\_NO\_REGISTRADO}. \\
+F-10 & Modificar cupos y luego fecha de una reserva. & Contadores de ambas fechas
+correctos; diferencia de precio calculada. \\
+F-11 & Modificar o cancelar la reserva de otro estudiante. & \codigo{RESERVA\_AJENA}. \\
+F-12 & Cancelar una reserva. & Respuesta inmediata \codigo{EN\_PROCESO}; después
+notificación \codigo{CONFIRMADA} y cupos liberados. \\
+F-13 & Modificar una reserva con cancelación pendiente. & \codigo{CANCELACION\_PENDIENTE}. \\
+F-14 & Reiniciar persistencia y consultar. & Las reservas anteriores siguen ahí. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Concurrencia y fallos}
+
+\begin{longtable}{p{1.4cm}p{6.6cm}p{7.3cm}}
+\caption{Casos de concurrencia e inyección de fallos.}
+\label{tab:fallos}\\
+\toprule
+ID & Caso & Resultado esperado \\
+\midrule
+\endfirsthead
+\toprule
+ID & Caso & Resultado esperado \\
+\midrule
+\endhead
+C-01 & 20 clientes piden 1 cupo a la vez en una fecha con 5 disponibles. & Exactamente 5
+reservas; 15 \codigo{CUPOS\_INSUFICIENTES}. \\
+C-02 & El mismo \codigo{idSolicitud} enviado 10 veces en paralelo. & Una sola
+reserva; 10 respuestas idénticas. \\
+C-03 & Al final de cada corrida: suma de cupos de las reservas activas de cada
+fecha. & Igual al contador de reservas de la fecha y nunca mayor al límite. \\
+FT-01 & Matar un procesador RMC durante una ráfaga de reservas. & Los clientes
+reintentan; sin duplicados; el gestor lo descarta en $\le$ 3\,s. \\
+FT-02 & Perder la respuesta de \codigo{reservar} (retardo con \codigo{tc netem}
+mayor al timeout). & El reintento devuelve la misma reserva, sin duplicado. \\
+FT-03 & Reiniciar el gestor con carga. & Los procesadores se vuelven a registrar;
+los clientes continúan tras reintentar. \\
+FT-04 & Detener el servicio de cancelación y cancelar reservas. & Las solicitudes
+quedan \codigo{PENDIENTE}; al volver, el barrido las aplica una vez. \\
+FT-05 & Matar persistencia a mitad de la carga y reiniciarla. & Ninguna reserva
+aplicada a medias; el estado se reconstruye desde la bitácora. \\
+FT-06 & 10\,\% de pérdida de paquetes entre cliente y gestor. & Los reintentos
+funcionan; sin duplicados. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Pruebas de desempeño}
+
+\begin{itemize}
+    \item \textbf{Escenarios de la Tabla~1} (sección~\ref{sec:metricas}): 3, 5 y 8
+          clientes en las arquitecturas base y escalable.
+    \item \textbf{Carga:} subir gradualmente el número de clientes hasta el uso esperado
+          y verificar p95 < 1\,s.
+    \item \textbf{Estrés:} seguir aumentando clientes hasta que el p95 supere 1\,s o los
+          errores superen 1\,\%; se registra el TPM máximo y qué componente se satura.
+    \item \textbf{Resistencia:} carga media durante 2 horas; la memoria de los procesos
+          no debe crecer sin límite.
+    \item \textbf{Escalabilidad:} misma carga con 1, 2 y 3 procesadores RMC; se espera
+          que el TPM crezca al agregar réplicas.
+\end{itemize}
+
+\subsection{Criterios de aceptación}
+
+\begin{itemize}
+    \item Todos los casos funcionales F-01 a F-14 pasan.
+    \item Ninguna corrida termina con sobrecupo, reservas duplicadas o contadores
+          descuadrados (C-03).
+    \item El 95\,\% de las transacciones termina en menos de 1\,s en los escenarios de
+          la Tabla~1.
+    \item Los fallos FT-01 a FT-06 no producen pérdida ni duplicación de datos.
+\end{itemize}
+
+\subsection{Trazabilidad}
+
+\begin{table}[H]
+\centering
+\caption{Requisitos frente a pruebas.}
+\begin{tabularx}{\textwidth}{p{6.4cm}Y}
+\toprule
+Requisito & Pruebas \\
+\midrule
+Consultar eventos de un mes & Unitarias de \codigo{BaseDatos}; F-01 a F-03 \\
+Reservar sin superar el límite & F-04 a F-09; C-01, C-03 \\
+Modificar y cancelar (asíncrona) & F-10 a F-13; FT-04 \\
+Reintentos sin duplicados & C-02; FT-01, FT-02, FT-06 \\
+Atomicidad y durabilidad & F-14; FT-05 \\
+Transacciones < 1\,s y Tabla~1 & Pruebas de desempeño \\
+Seguridad & F-11; pruebas de seguridad \\
+\bottomrule
+\end{tabularx}
+\end{table}

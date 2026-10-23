@@ -1,0 +1,82 @@
+% Diagrama de clases UML – modelo de dominio (capa de almacenamiento)
+\begin{tikzpicture}[font=\footnotesize]
+    \begin{abstractclass}[text width=4.4cm]{Lugar}{0,0}
+        \operation[0]{+ capacidad() : int}
+        \operation[0]{+ descripcion() : string}
+    \end{abstractclass}
+
+    \begin{class}[text width=4.4cm]{LugarUniversidad}{-2.6,-4.6}
+        \inherit{Lugar}
+        \attribute{- id : string}
+        \attribute{- nombre : string}
+        \attribute{- tipo : EDIFICIO | TEATRO}
+        \attribute{- capacidad : int}
+    \end{class}
+
+    \begin{class}[text width=4.0cm]{LugarExterno}{2.6,-4.6}
+        \inherit{Lugar}
+        \attribute{- direccion : string}
+        \attribute{- capacidad : int}
+    \end{class}
+
+    \begin{class}[text width=4.6cm]{Evento}{8.4,0}
+        \attribute{- id : string}
+        \attribute{- nombre : string}
+        \attribute{- precio : long}
+        \operation{+ limite() : int}
+    \end{class}
+
+    \begin{class}[text width=5.4cm]{FechaEvento}{8.4,-5.6}
+        \attribute{- id : string}
+        \attribute{- fecha : string}
+        \attribute{- reservas : int}
+        \operation{+ mes() : string}
+        \operation{+ hayCupo(cupos, limite) : bool}
+        \operation{+ ocupar(cupos) : void}
+        \operation{+ liberar(cupos) : void}
+    \end{class}
+
+    \begin{class}[text width=5.0cm]{Estudiante}{14.8,0}
+        \attribute{- codigo : string}
+        \attribute{- nombre : string}
+        \attribute{- tipoDocumento : string}
+        \attribute{- numeroDocumento : string}
+        \attribute{- carrera : string}
+        \attribute{- departamento : string}
+        \attribute{- semestre : int}
+        \attribute{- correo : string}
+        \attribute{- telefono : string}
+    \end{class}
+
+    \begin{class}[text width=5.4cm]{Reserva}{14.8,-7.0}
+        \attribute{- id : string}
+        \attribute{- cupos : int}
+        \attribute{- estado : ACTIVA | CANCELADA}
+        \operation{+ cambiar(cupos, idFecha) : void}
+        \operation{+ cancelar() : void}
+    \end{class}
+
+    \begin{class}[text width=6.4cm]{Transaccion}{22.4,-7.0}
+        \attribute{- id : string}
+        \attribute{- idSolicitud : string}
+        \attribute{- tipo : RESERVA | MODIFICACION | CANCELACION}
+        \attribute{- cupos : int}
+        \attribute{- monto : long}
+        \attribute{- instante : long}
+    \end{class}
+
+    \begin{class}[text width=6.4cm]{SolicitudCancelacion}{22.4,0}
+        \attribute{- idSolicitud : string}
+        \attribute{- estado : PENDIENTE | CONFIRMADA | FALLIDA}
+        \attribute{- creada : long}
+        \operation{+ confirmar() : void}
+        \operation{+ fallar(detalle) : void}
+    \end{class}
+
+    \unidirectionalAssociation{Evento}{se realiza en}{1}{Lugar}
+    \composition{Evento}{fechas}{1..*}{FechaEvento}
+    \association{Estudiante}{}{1}{Reserva}{reservas}{0..*}
+    \unidirectionalAssociation{Reserva}{fecha}{1}{FechaEvento}
+    \association{Reserva}{}{1}{Transaccion}{historial}{1..*}
+    \unidirectionalAssociation{SolicitudCancelacion}{cancela}{1}{Reserva}
+\end{tikzpicture}

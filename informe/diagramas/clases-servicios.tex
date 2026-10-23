@@ -1,0 +1,115 @@
+% Diagrama de clases UML – procesos, comunicación y almacenamiento
+\begin{tikzpicture}[font=\footnotesize]
+    % ---------------- Clase base de los procesos servidores
+    \begin{abstractclass}[text width=6.2cm]{Servicio}{11.2,0}
+        \attribute{- nombre : string}
+        \attribute{- contexto : zmq::context\_t}
+        \operation{+ ejecutar() : int}
+        \operation[0]{\# inicializar() : void}
+        \operation[0]{\# iterar() : void}
+        \operation{\# finalizar() : void}
+    \end{abstractclass}
+
+    % ---------------- Procesos
+    \begin{class}[text width=6.6cm]{GestorTransacciones}{0,-5.2}
+        \inherit{Servicio}
+        \attribute{- frontend : socket ROUTER}
+        \attribute{- backend : socket ROUTER}
+        \attribute{- publicador : socket PUB}
+        \attribute{- procesadoresLibres : deque<string>}
+        \attribute{- ultimoContacto : map<string,long>}
+        \operation{- atenderCliente() : void}
+        \operation{- atenderProcesador() : void}
+        \operation{- enviarAProcesador(...) : bool}
+        \operation{- publicarCancelacion(Mensaje) : void}
+    \end{class}
+
+    \begin{class}[text width=6.6cm]{ProcesadorRMC}{7.4,-5.2}
+        \inherit{Servicio}
+        \attribute{- gestor : socket DEALER}
+        \operation{- procesar(Mensaje) : Mensaje}
+        \operation{- consultarEventosMes(Mensaje) : Mensaje}
+        \operation{- reservar(Mensaje) : Mensaje}
+        \operation{- modificarReserva(Mensaje) : Mensaje}
+        \operation{- cancelarReserva(Mensaje) : Mensaje}
+        \operation{- enviarLatido() : void}
+    \end{class}
+
+    \begin{class}[text width=5.8cm]{ServicioCancelacion}{14.6,-5.2}
+        \inherit{Servicio}
+        \attribute{- avisos : socket SUB}
+        \attribute{- notificaciones : socket PUB}
+        \operation{- procesar(idSolicitud) : void}
+        \operation{- barrer() : void}
+        \operation{- notificar(Mensaje) : void}
+    \end{class}
+
+    \begin{class}[text width=5.6cm]{ServicioPersistencia}{21.4,-5.2}
+        \inherit{Servicio}
+        \attribute{- socket : socket REP}
+        \operation{- atender(Mensaje) : Mensaje}
+        \operation{- aplicar(Mensaje) : Mensaje}
+    \end{class}
+
+    % ---------------- Apoyo
+    \begin{class}[text width=6.8cm]{ClienteConfiable}{10.9,-12.2}
+        \attribute{- endpoint : string}
+        \attribute{- timeout : milliseconds}
+        \attribute{- intentos : int}
+        \attribute{- socket : socket REQ}
+        \operation{+ solicitar(Mensaje) : optional<Mensaje>}
+    \end{class}
+
+    \begin{class}[text width=6.6cm]{BaseDatos}{18.6,-12.2}
+        \operation{+ listarFechasMes(Mensaje) : Mensaje}
+        \operation{+ listarReservasEstudiante(Mensaje) : Mensaje}
+        \operation{+ crearReserva(Mensaje) : Mensaje}
+        \operation{+ modificarReserva(Mensaje) : Mensaje}
+        \operation{+ registrarCancelacion(Mensaje) : Mensaje}
+        \operation{+ aplicarCancelacion(Mensaje) : Mensaje}
+        \operation{+ respuestaPrevia(clave) : Mensaje*}
+    \end{class}
+
+    \begin{interface}[text width=5.2cm]{Almacenamiento}{25.4,-12.2}
+        \operation[0]{+ cargar() : vector<Mensaje>}
+        \operation[0]{+ registrar(Mensaje) : void}
+    \end{interface}
+
+    \begin{class}[text width=5.2cm]{AlmacenamientoArchivo}{25.4,-16.2}
+        \implement{Almacenamiento}
+        \attribute{- ruta : string}
+    \end{class}
+
+    \begin{class}[text width=6.4cm]{Mensaje}{2.4,-12.2}
+        \attribute{- tipo : string}
+        \attribute{- campos : map<string,string>}
+        \attribute{- filas : vector<Fila>}
+        \operation{+ poner(clave, valor) : Mensaje\&}
+        \operation{+ texto(clave) : string}
+        \operation{+ serializar() : string}
+        \operation{+ deserializar(string) : Mensaje}
+    \end{class}
+
+    % ---------------- Consumidores
+    \begin{class}[text width=6.6cm]{Cliente}{2.4,-18.0}
+        \attribute{- idEstudiante : string}
+        \operation{+ consultarEventosMes(mes) : Mensaje}
+        \operation{+ reservar(idFecha, cupos) : Mensaje}
+        \operation{+ modificarReserva(...) : Mensaje}
+        \operation{+ cancelarReserva(idReserva) : Mensaje}
+        \operation{+ notificacionesPendientes() : vector}
+    \end{class}
+
+    \begin{class}[text width=4.4cm]{ConsolaCliente}{10.9,-18.8}
+        \operation{+ ejecutar() : int}
+    \end{class}
+
+    % ---------------- Relaciones
+    \composition{ProcesadorRMC}{}{}{ClienteConfiable}
+    \composition{ServicioCancelacion}{}{}{ClienteConfiable}
+    \composition{ServicioPersistencia}{}{}{BaseDatos}
+    \aggregation{ServicioPersistencia}{}{}{Almacenamiento}
+    \composition{Cliente}{}{}{ClienteConfiable}
+    \unidirectionalAssociation{ConsolaCliente}{usa}{1}{Cliente}
+    \draw[umlcd style dashed line, ->] (GestorTransacciones) -- node[left, font=\scriptsize] {\guillemotleft use\guillemotright} (Mensaje);
+\end{tikzpicture}
