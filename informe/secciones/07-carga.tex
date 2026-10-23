@@ -1,0 +1,52 @@
+\section{Generación de carga desde los clientes}
+\label{sec:carga}
+
+\subsection{Herramienta}
+
+Se usará un \textbf{generador de carga propio en C++}: el mismo programa cliente
+(\codigo{bin/cliente}) con un modo de carga que reutiliza la clase \codigo{Cliente}.
+Se descartaron herramientas como JMeter, Locust o k6 porque hablan HTTP y no
+ZeroMQ; usarlas obligaría a escribir un adaptador que agregaría su propio tiempo a
+las mediciones. Con el cliente propio, la carga recorre exactamente el mismo camino
+que un estudiante real.
+
+\begin{lstlisting}
+bin/cliente --carga consulta|consulta-reserva|reserva-modificacion
+            --duracion 720 --id C1 --escenario ESC-5 --arquitectura base
+            --csv resultados/tiempos_ESC-5_base_C1.csv
+\end{lstlisting}
+
+\subsection{Método}
+
+\begin{itemize}
+    \item \textbf{Un proceso por cliente simulado}, cada uno con su propio socket
+          \codigo{REQ}. Así los clientes son realmente concurrentes y no comparten
+          colas internas.
+    \item \textbf{Ciclo cerrado sin tiempo de espera:} cada cliente envía la siguiente
+          solicitud apenas recibe la respuesta. Con pocos clientes (3 a 8) esto mide
+          la capacidad real del sistema y da resultados repetibles.
+    \item \textbf{Tipos de cliente} según la Tabla~1:
+          \begin{itemize}
+              \item \emph{consulta}: repite \codigo{consultarEventosMes} sobre los meses con eventos;
+              \item \emph{consulta-reserva}: una consulta y luego una reserva de 1 cupo;
+              \item \emph{reserva-modificacion}: una reserva y luego su modificación
+                    (cambio de cupos).
+          \end{itemize}
+    \item \textbf{Datos de prueba:} cada reserva la hace un estudiante distinto,
+          generado para la prueba, en un evento con capacidad suficiente. Así no se
+          choca con la regla de una reserva por evento ni se agotan los cupos, y los
+          errores de negocio no contaminan los tiempos.
+    \item \textbf{Orquestación:} un script \codigo{bash},
+          \codigo{scripts/correr\_escenario.sh}, recibe el escenario
+          (\codigo{ESC-3}, \codigo{ESC-5} o \codigo{ESC-8}) y la arquitectura
+          (\codigo{base} o \codigo{escalable}), lanza los procesos del escenario al mismo tiempo, espera a que terminen y
+          une sus archivos CSV.
+    \item \textbf{Ubicación:} los clientes corren en una máquina distinta a la de los
+          servicios (Máquina 1 de la Figura~\ref{fig:despliegue}) para no competir por
+          CPU con el sistema medido.
+    \item \textbf{Pruebas de estrés y resistencia:} el mismo generador, lanzando más
+          procesos de forma escalonada.
+\end{itemize}
+
+Para la prueba de concurrencia C-01 se lanza un grupo de procesos que envían su
+reserva al mismo tiempo sobre una fecha con pocos cupos.

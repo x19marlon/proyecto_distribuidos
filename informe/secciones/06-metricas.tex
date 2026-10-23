@@ -1,0 +1,145 @@
+\section{Herramientas y estrategia para las métricas de desempeño}
+\label{sec:metricas}
+
+\subsection{Escenarios y variables de la Tabla~1}
+
+Cada escenario se ejecuta sobre la arquitectura base y sobre la escalable:
+
+\begin{table}[H]
+\centering
+\caption{Escenarios de la Tabla~1.}
+\begin{tabular}{lcccc}
+\toprule
+Escenario & Clientes & Solo consultan & Consultan y reservan & Reservan y modifican \\
+\midrule
+ESC-3 & 3 & 2 & 1 & 0 \\
+ESC-5 & 5 & 3 & 0 & 2 \\
+ESC-8 & 8 & 4 & 0 & 4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Se miden cuatro variables. Para efectos de la medición, la modificación cuenta
+como operación de reserva y también se reporta por separado.
+
+\begin{table}[H]
+\centering
+\caption{Variables y dónde se miden.}
+\begin{tabularx}{\textwidth}{p{4.6cm}p{4.2cm}Y}
+\toprule
+Variable & Fórmula & Dónde se mide \\
+\midrule
+Tiempo promedio y desviación estándar de las \textbf{consultas} &
+$\bar{t}=\frac{1}{n}\sum t_i$, \ $s=\sqrt{\frac{1}{n-1}\sum (t_i-\bar{t})^2}$ &
+En cada cliente: inicio y fin de cada \codigo{consultarEventosMes} con el reloj
+monótono (\codigo{std::chrono::steady\_clock}). \\
+Tiempo promedio y desviación estándar de las \textbf{reservas} & Igual &
+En cada cliente, para \codigo{reservar} y \codigo{modificarReserva}. \\
+\textbf{TPM de consultas} & consultas exitosas $\div$ minutos de medición &
+En el Gestor de Transacciones: contador por categoría y por minuto. \\
+\textbf{TPM de reservas} & reservas confirmadas $\div$ minutos de medición &
+En el Gestor y verificado en persistencia: transacciones de la bitácora con
+instante dentro de la ventana de medición. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+El tiempo de respuesta se mide en el cliente porque es lo que percibe el
+estudiante: incluye red, gestor, procesador y persistencia. Las duraciones usan el
+reloj monótono de una sola máquina, así que la deriva entre relojes no las afecta.
+Las TPM se cuentan en el gestor de transacciones, como permite el enunciado, y se
+cruzan con persistencia para confirmar que coinciden.
+
+\subsection{Instrumentación en el código}
+
+\begin{itemize}
+    \item \textbf{Cliente de carga:} registra por operación el instante de inicio, la
+          categoría (\codigo{CONSULTA} o \codigo{RESERVA}), la operación, la latencia
+          en milisegundos, si fue exitosa y el código de error. Al terminar escribe un
+          archivo CSV:
+\begin{lstlisting}
+escenario,arquitectura,cliente,tipo_cliente,inicio_ms,categoria,operacion,latencia_ms,exitosa,codigo_error
+ESC-5,base,C1,consulta,1792706556363,CONSULTA,consultarEventosMes,4,1,
+\end{lstlisting}
+    \item \textbf{Gestor de Transacciones:} una clase \codigo{Metricas} acumula por
+          categoría la cantidad, los errores, la suma y la suma de cuadrados de las
+          latencias, y cada minuto agrega al archivo
+          \codigo{metricas\_gestor.csv} una línea con transacciones, errores,
+          promedio, desviación y TPM. Agregar un contador cuesta unos pocos
+          nanosegundos, así que no altera lo que se mide.
+    \item \textbf{Persistencia:} cada transacción guarda su instante en la bitácora,
+          lo que permite contar las reservas confirmadas por minuto.
+    \item \textbf{Recursos:} CPU y memoria por proceso con \codigo{pidstat} (paquete
+          \codigo{sysstat}) cada segundo, para identificar el cuello de botella.
+\end{itemize}
+
+\subsection{Herramientas}
+
+\begin{table}[H]
+\centering
+\caption{Herramientas y librerías de medición.}
+\begin{tabularx}{\textwidth}{p{4.4cm}Y}
+\toprule
+Herramienta & Uso \\
+\midrule
+\codigo{std::chrono} (C++17) & Reloj monótono para las latencias y reloj de pared
+para ubicar cada medición en la ventana. \\
+Archivos CSV & Formato común de los clientes, el gestor y \codigo{pidstat}. \\
+Python 3 + \textbf{pandas} y \textbf{NumPy} & Unir los CSV de todos los clientes,
+descartar el calentamiento y calcular promedio, desviación estándar muestral, p95,
+TPM y porcentaje de transacciones < 1\,s por escenario y arquitectura. \\
+\textbf{matplotlib} & Gráficos para el informe. \\
+\codigo{pidstat} / \codigo{htop} & Uso de CPU y memoria por proceso. \\
+Prometheus + Grafana (segunda entrega) & Paneles en tiempo real con la librería
+\textbf{prometheus-cpp} en los procesos, y \codigo{node\_exporter} para las
+máquinas. Útiles para las pruebas de estrés y de fallos. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Procedimiento de cada corrida}
+
+\begin{enumerate}
+    \item Levantar la arquitectura (base: 1 procesador RMC; escalable: 3) con datos
+          iniciales limpios.
+    \item Lanzar a la vez los procesos cliente del escenario.
+    \item Descartar los primeros 2 minutos (calentamiento) y medir durante 10 minutos.
+    \item Repetir cada combinación 3 veces y reportar el promedio de las repeticiones.
+    \item Verificar la consistencia (C-03): ninguna fecha con sobrecupo.
+\end{enumerate}
+
+Son 3 escenarios $\times$ 2 arquitecturas $\times$ 3 repeticiones = 18 corridas.
+
+\subsection{Presentación de los resultados}
+
+Los resultados se presentarán en una tabla con una fila por escenario y
+arquitectura (promedio y desviación de consultas y de reservas, TPM de consultas y
+de reservas, errores) y en cuatro gráficos con el número de clientes (3, 5 y 8) en
+el eje horizontal y una línea por arquitectura:
+
+\begin{enumerate}
+    \item tiempo promedio de las consultas, con barras de $\pm$ una desviación estándar;
+    \item tiempo promedio de las reservas, con barras de $\pm$ una desviación estándar;
+    \item TPM de consultas;
+    \item TPM de reservas.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\caption{Plantilla de la tabla de resultados (se completará en la entrega final).}
+\small
+\begin{tabular}{llcccccc}
+\toprule
+& & \multicolumn{2}{c}{Consultas (ms)} & \multicolumn{2}{c}{Reservas (ms)} & \multicolumn{2}{c}{TPM} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+Escenario & Arquitectura & Prom. & Desv. & Prom. & Desv. & Consultas & Reservas \\
+\midrule
+ESC-3 & Base & & & & & & \\
+ESC-3 & Escalable & & & & & & \\
+ESC-5 & Base & & & & & & \\
+ESC-5 & Escalable & & & & & & \\
+ESC-8 & Base & & & & & & \\
+ESC-8 & Escalable & & & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}

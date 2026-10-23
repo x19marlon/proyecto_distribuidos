@@ -35,6 +35,11 @@
 | D29 | Arquitectura base = Fase 0 (una réplica de cada componente); arquitectura escalable = Fase 1 (réplicas de gestores y trabajadores de persistencia, PostgreSQL con réplica) | Permite comparar en el mismo clúster cambiando solo las réplicas |
 | D30 | Tiempos de respuesta medidos del lado del consumidor; TPM de consultas en la capa de persistencia y TPM de reservas en la BD (tabla `transacciones`) | El enunciado permite medir en el gestor de transacciones o en la BD; las consultas no pasan por `GestorTransacciones` |
 | D31 | Los clientes de los escenarios del curso funcionan en ciclo cerrado, sin tiempo de reflexión: 2 min de calentamiento + 10 min de medición, 3 repeticiones | Mide la capacidad real con pocos clientes y da resultados repetibles |
+| D32 | Lenguaje: C++17 orientado a objetos con ZeroMQ (libzmq + cppzmq) | Decisión del equipo |
+| D33 | La entrega 1 implementa solo la consulta de eventos por mes y la reserva de cupos, sobre la parte síncrona de la Figura 1: el `GestorTransacciones` recibe a los clientes y reparte las peticiones entre procesadores RMC (patrón load balancing broker) | Alcance de la entrega |
+| D34 | Los procesadores RMC usan `DEALER` con latidos cada 1 s; el gestor los descarta tras 3 s sin latidos | Paranoid Pirate; detecta procesadores caídos y permite reiniciar el gestor |
+| D35 | Persistencia de la entrega 1: datos en memoria + bitácora de reservas en archivo que se reaplica al arrancar, detrás de la interfaz `Almacenamiento` | Durable y simple; se puede cambiar por PostgreSQL sin tocar el resto |
+| D36 | Mensajes en texto `clave=valor` con filas separadas por `--` (clase `Mensaje`) | Sin dependencias extra; fácil de leer en los logs |
 
 ## Pendientes
 
@@ -42,11 +47,11 @@ Llenar la columna "Decisión" cuando el equipo se ponga de acuerdo.
 
 | # | Pregunta | Opciones | Decisión |
 |---|---|---|---|
-| O1 | Lenguaje de programación | Java, Python, Go, Node.js | |
+| O1 | Lenguaje de programación | **Decidido:** C++17 orientado a objetos (D32) | ✔ |
 | O2 | Comunicación síncrona entre capas | **Decidido: ZeroMQ** (D21) | ✔ |
 | O3 | Almacenamiento | **Decidido: PostgreSQL** (D24) | ✔ |
 | O4 | Control de concurrencia | Bloqueo de fila, bloqueo optimista, actualización condicional, escritor único (ver [aspectos-distribuidos.md](aspectos-distribuidos.md)) | |
-| O5 | Tipo de consumidor | CLI, interfaz de escritorio, web | |
+| O5 | Tipo de consumidor | **Entrega 1:** CLI (`bin/cliente`) | ✔ |
 | O6 | ¿Cómo se pagan los eventos pagos? | Saldo prepagado del estudiante con recargas (diseño actual), pago registrado sin saldo | |
 | O7 | ¿Dos eventos pueden usar el mismo lugar en la misma fecha y hora? | Permitido, bloqueado | |
 | O8 | ¿El `departamento` es texto libre o una lista fija (y la `carrera` está ligada a un departamento)? | Texto libre, tabla de catálogo | |
@@ -69,4 +74,4 @@ Llenar la columna "Decisión" cuando el equipo se ponga de acuerdo.
 | O25 | Distribución de Kubernetes | k3s (propuesta), kubeadm | |
 | O26 | Acceso externo al broker-servicios | NodePort (propuesta), MetalLB | |
 | O27 | ¿Pares de brokers Binary Star desde el inicio o en la fase 2? | Fase 1: un solo broker + reinicios; Fase 2: Binary Star | |
-| O28 | Serialización de los mensajes | JSON (propuesta), MessagePack, Protobuf | |
+| O28 | Serialización de los mensajes | **Decidido:** texto `clave=valor` (D36) | ✔ |

@@ -1,5 +1,7 @@
 # Despliegue en Kubernetes
 
+> **Entrega 1:** todavía no hay manifiestos; los procesos se levantan con `scripts/iniciar_sistema.sh` y sus direcciones se configuran con variables de entorno, lo que permite empaquetarlos después en contenedores. Ver [implementacion.md](implementacion.md).
+
 El sistema corre en un **clúster de Kubernetes de 4 máquinas**: **1 plano de
 control** y **3 nodos worker**. La comunicación entre procesos usa ZeroMQ
 ([comunicacion-zeromq.md](comunicacion-zeromq.md)).

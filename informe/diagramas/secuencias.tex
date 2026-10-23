@@ -1,0 +1,96 @@
+% Diagramas de secuencia UML – arquitectura base
+% Cada uno se define como un comando para incluirlo en su propia figura.
+% Nota: en pgf-umlsd las etiquetas con paréntesis de \mess van entre llaves dobles.
+
+\newcommand{\secuenciaConsultar}{%
+{\footnotesize
+\begin{sequencediagram}
+    \newthread[morado!15]{c}{:Cliente}
+    \newinst[1.6]{g}{:GestorTransacciones}
+    \newinst[1.6]{r}{:ProcesadorRMC}
+    \newinst[1.6]{p}{:ServicioPersistencia}
+    \begin{call}{c}{consultarEventosMes(mes)}{g}{OK + filas}
+        \begin{call}{g}{petición}{r}{respuesta}
+            \begin{callself}{r}{validar AAAA-MM}{}
+            \end{callself}
+            \begin{call}{r}{listarFechasMes(mes)}{p}{OK + filas}
+                \begin{callself}{p}{fechas del mes}{}
+                \end{callself}
+            \end{call}
+        \end{call}
+    \end{call}
+\end{sequencediagram}}}
+
+\newcommand{\secuenciaReservar}{%
+{\footnotesize
+\begin{sequencediagram}
+    \newthread[morado!15]{c}{:Cliente}
+    \newinst[1.6]{g}{:GestorTransacciones}
+    \newinst[1.6]{r}{:ProcesadorRMC}
+    \newinst[1.6]{p}{:ServicioPersistencia}
+    \begin{call}{c}{reservar(idFecha, cupos)}{g}{OK idReserva}
+        \begin{call}{g}{petición}{r}{respuesta}
+            \begin{callself}{r}{validar datos}{}
+            \end{callself}
+            \begin{call}{r}{crearReserva}{p}{OK / ERROR}
+                \begin{sdblock}{alt}{[idSolicitud ya procesado]}
+                    \begin{callself}{p}{\shortstack[l]{devolver la\\respuesta guardada}}{}
+                    \end{callself}
+                \end{sdblock}
+                \begin{callself}{p}{\shortstack[l]{validar estudiante,\\fecha y cupos}}{}
+                \end{callself}
+                \begin{callself}{p}{\shortstack[l]{aplicar todo o nada\\y guardar en bitácora}}{}
+                \end{callself}
+            \end{call}
+        \end{call}
+    \end{call}
+\end{sequencediagram}}}
+
+\newcommand{\secuenciaModificar}{%
+{\footnotesize
+\begin{sequencediagram}
+    \newthread[morado!15]{c}{:Cliente}
+    \newinst[1.6]{g}{:GestorTransacciones}
+    \newinst[1.6]{r}{:ProcesadorRMC}
+    \newinst[1.6]{p}{:ServicioPersistencia}
+    \begin{call}{c}{modificarReserva}{g}{OK / ERROR}
+        \begin{call}{g}{petición}{r}{respuesta}
+            \begin{callself}{r}{validar datos}{}
+            \end{callself}
+            \begin{call}{r}{modificarReserva}{p}{OK / ERROR}
+                \begin{callself}{p}{\shortstack[l]{verificar dueño, estado\\y cupos en la fecha destino}}{}
+                \end{callself}
+                \begin{callself}{p}{\shortstack[l]{liberar origen, ocupar destino,\\registrar transacción}}{}
+                \end{callself}
+            \end{call}
+        \end{call}
+    \end{call}
+\end{sequencediagram}}}
+
+\newcommand{\secuenciaCancelar}{%
+{\footnotesize
+\begin{sequencediagram}
+    \newthread[morado!15]{c}{:Cliente}
+    \newinst[1.8]{g}{:GestorTransacciones}
+    \newinst[1.2]{r}{:ProcesadorRMC}
+    \newinst[1.2]{x}{:ServicioCancelacion}
+    \newinst[1.4]{p}{:ServicioPersistencia}
+    \begin{call}{c}{cancelarReserva}{g}{EN\_PROCESO}
+        \begin{call}{g}{petición}{r}{EN\_PROCESO}
+            \begin{call}{r}{registrarCancelacion}{p}{OK}
+                \begin{callself}{p}{\shortstack[l]{guardar solicitud\\PENDIENTE}}{}
+                \end{callself}
+            \end{call}
+        \end{call}
+        \mess{g}{{PUB aviso (idSolicitud)}}{x}
+    \end{call}
+    \begin{call}{x}{aplicarCancelacion}{p}{CONFIRMADA}
+        \begin{callself}{p}{\shortstack[l]{liberar cupos, reserva\\CANCELADA, transacción}}{}
+        \end{callself}
+    \end{call}
+    \mess{x}{{PUB notificación (CONFIRMADA)}}{c}
+    \begin{sdblock}{loop}{[cada 2 s: barrido]}
+        \begin{call}{x}{listarPendientes}{p}{PENDIENTES}
+        \end{call}
+    \end{sdblock}
+\end{sequencediagram}}}

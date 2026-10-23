@@ -41,3 +41,7 @@ Cualquiera de estas opciones sirve:
 Documentación relacionada: [arquitectura](../arquitectura.md),
 [modelo de dominio](../modelo-dominio.md), [flujos](../flujos.md),
 [modelos del sistema](../modelos-sistema.md).
+
+## Figura 1 del enunciado
+
+[diagrama_proyecto.png](diagrama_proyecto.png): Arquitectura Básica del Sistema, su parte síncrona (consulta y reserva) se implementa en la entrega 1 (ver [implementacion.md](../implementacion.md)).

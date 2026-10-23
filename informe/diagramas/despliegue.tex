@@ -1,0 +1,52 @@
+% Diagrama de despliegue UML – arquitectura base
+\begin{tikzpicture}[
+    font=\small,
+    artefacto/.style={draw, fill=white, rounded corners=1pt, minimum width=4.8cm,
+                      minimum height=1.05cm, align=center, inner sep=3pt},
+    archivo/.style={artefacto, fill=gris!8},
+    titulo/.style={align=center, inner sep=2pt},
+    maquina/.style={draw, thick, fill=azulclaro, inner sep=0.3cm},
+    enlace/.style={thick, draw=azul},
+    etiqueta/.style={font=\scriptsize, fill=white, align=center, inner sep=1.5pt},
+]
+    % Dibuja el efecto 3D de un nodo UML
+    \newcommand{\cubo}[1]{%
+        \draw[thick, fill=azulclaro!60] (#1.north west) -- ++(0.3,0.3) -- ($(#1.north east)+(0.3,0.3)$)
+            -- ($(#1.south east)+(0.3,0.3)$) -- (#1.south east) -- (#1.north east) -- cycle;
+        \draw[thick] (#1.north east) -- ++(0.3,0.3);}
+
+    % ---------------- Máquina 1: clientes
+    \node[titulo] (t1) at (0,0) {\guillemotleft device\guillemotright\\\textbf{Máquina 1 – Clientes}};
+    \node[artefacto, below=0.2cm of t1] (cli1) {\guillemotleft artifact\guillemotright\\\codigo{bin/cliente} (estudiante 1)};
+    \node[artefacto, below=0.25cm of cli1] (cli2) {\guillemotleft artifact\guillemotright\\\codigo{bin/cliente} (estudiante 2)};
+    \node[below=0.02cm of cli2] (clin) {\Large $\vdots$};
+    \node[artefacto, below=0.02cm of clin] (cli3) {\guillemotleft artifact\guillemotright\\\codigo{bin/cliente} (estudiante N)};
+
+    % ---------------- Máquina 2: gestor
+    \node[titulo] (t2) at (9.5,0) {\guillemotleft device\guillemotright\\\textbf{Máquina 2 – Gestor}};
+    \node[artefacto, below=0.2cm of t2] (ges) {\guillemotleft artifact\guillemotright\\\codigo{bin/gestor-transacciones}};
+
+    % ---------------- Máquina 3: procesos de negocio
+    \node[titulo] (t3) at (9.5,-4.4) {\guillemotleft device\guillemotright\\\textbf{Máquina 3 – Negocio}};
+    \node[artefacto, below=0.2cm of t3] (rmc) {\guillemotleft artifact\guillemotright\\\codigo{bin/procesador-rmc}};
+    \node[artefacto, below=0.25cm of rmc] (can) {\guillemotleft artifact\guillemotright\\\codigo{bin/cancelacion-reservas}};
+
+    % ---------------- Máquina 4: persistencia
+    \node[titulo] (t4) at (9.5,-10.2) {\guillemotleft device\guillemotright\\\textbf{Máquina 4 – Almacenamiento}};
+    \node[artefacto, below=0.2cm of t4] (per) {\guillemotleft artifact\guillemotright\\\codigo{bin/persistencia}};
+    \node[archivo, below=0.25cm of per] (bit) {\guillemotleft file\guillemotright\\\codigo{datos/bitacora.txt}};
+
+    \begin{scope}[on background layer]
+        \node[maquina, fit=(t1)(cli1)(cli3)] (m1) {};
+        \node[maquina, fit=(t2)(ges)] (m2) {};
+        \node[maquina, fit=(t3)(rmc)(can)] (m3) {};
+        \node[maquina, fit=(t4)(per)(bit)] (m4) {};
+        \cubo{m1} \cubo{m2} \cubo{m3} \cubo{m4}
+    \end{scope}
+
+    % ---------------- Enlaces de red
+    \draw[enlace] (m2.west) -- node[etiqueta, above=3pt] {\guillemotleft TCP / ZeroMQ\guillemotright\\REQ $\rightarrow$ ROUTER :5555} (m2.west -| m1.east);
+    \draw[enlace] (m2.south) -- node[etiqueta, right=3pt] {\guillemotleft TCP / ZeroMQ\guillemotright\\ROUTER :5556 $\leftrightarrow$ DEALER\\PUB :5557 $\rightarrow$ SUB} (m3.north);
+    \draw[enlace] (m3.south) -- node[etiqueta, right=3pt] {\guillemotleft TCP / ZeroMQ\guillemotright\\REQ $\rightarrow$ REP :5560} (m4.north);
+    \draw[enlace, dashed] (m3.west) -| node[etiqueta, pos=0.3, below=3pt] {\guillemotleft TCP / ZeroMQ\guillemotright\\notificaciones\\PUB :5558 $\rightarrow$ SUB} (m1.south);
+\end{tikzpicture}

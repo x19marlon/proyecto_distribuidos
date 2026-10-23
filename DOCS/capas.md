@@ -1,5 +1,7 @@
 # Capas
 
+> **Entrega 1:** solo están implementadas la consulta de eventos por mes y la reserva de cupos. Modificar, cancelar, los gestores de estudiantes, eventos y métricas, el CRUD de eventos y el saldo quedan para entregas siguientes; las tablas se reemplazan por una bitácora en archivo. Ver [implementacion.md](implementacion.md).
+
 ## 1. Consumidores
 
 Los consumidores son los clientes del sistema: un cliente para estudiantes y un

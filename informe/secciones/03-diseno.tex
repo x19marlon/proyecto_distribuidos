@@ -1,0 +1,234 @@
+\section{Diseño del sistema: arquitectura base}
+\label{sec:diseno}
+
+\input{diagramas/secuencias}
+
+\subsection{Visión general}
+
+La Figura~\ref{fig:arquitectura-basica} muestra la arquitectura básica que se
+diseña en esta sección. En la \textbf{arquitectura base} hay exactamente una
+instancia de cada componente.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figuras/arquitectura-basica.png}
+    \caption{Arquitectura básica del sistema (Figura~1 del enunciado).}
+    \label{fig:arquitectura-basica}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Clientes} (capa de consumidores): envían solicitudes de consulta,
+          reserva, modificación y cancelación, y reciben notificaciones.
+    \item \textbf{Gestor de Transacciones}: único punto de entrada de la capa de
+          negocio. Las operaciones síncronas las envía al procesamiento RMC; las
+          cancelaciones las publica para que se apliquen de forma asíncrona.
+    \item \textbf{Procesamiento de reservas, modificaciones y consultas (RMC)}:
+          valida y ejecuta las operaciones síncronas contra persistencia.
+    \item \textbf{Cancelación de reservas}: aplica las cancelaciones y notifica al
+          estudiante (línea punteada de la figura).
+    \item \textbf{Servicio de Persistencia} (capa de almacenamiento): guarda los
+          datos y aplica cada cambio de forma atómica.
+\end{itemize}
+
+\subsection{Comunicación entre componentes}
+
+Toda la comunicación usa ZeroMQ (libzmq 4.3 con el enlace C++ cppzmq~\cite{cppzmq}).
+La Tabla~\ref{tab:sockets} resume los sockets.
+
+\begin{table}[H]
+\centering
+\caption{Sockets ZeroMQ de la arquitectura base.}
+\label{tab:sockets}
+\begin{tabularx}{\textwidth}{p{3.5cm}p{3.2cm}p{1.2cm}Y}
+\toprule
+Enlace & Sockets & Puerto & Uso \\
+\midrule
+Cliente $\rightarrow$ Gestor & \codigo{REQ} $\rightarrow$ \codigo{ROUTER} & 5555 &
+Todas las solicitudes del estudiante; el cliente espera la respuesta. \\
+Gestor $\leftrightarrow$ RMC & \codigo{ROUTER} $\leftrightarrow$ \codigo{DEALER} & 5556 &
+El gestor reparte las peticiones entre los procesadores libres (patrón
+\emph{load balancing broker}~\cite{zguide}). \\
+Gestor $\rightarrow$ Cancelación & \codigo{PUB} $\rightarrow$ \codigo{SUB} & 5557 &
+Aviso de cancelación aceptada (tema \codigo{cancelacion}). \\
+Cancelación $\rightarrow$ Cliente & \codigo{PUB} $\rightarrow$ \codigo{SUB} & 5558 &
+Notificación del resultado; cada cliente se suscribe al tema de su
+\codigo{idEstudiante}. \\
+RMC / Cancelación $\rightarrow$ Persistencia & \codigo{REQ} $\rightarrow$ \codigo{REP} & 5560 &
+Consultas y cambios de datos. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Formato de los mensajes.} Cada mensaje es una trama de texto: la primera
+línea es el tipo de operación y las siguientes son pares \codigo{clave=valor}; una
+línea \codigo{--} abre una fila nueva para las respuestas con listas. Los errores
+se responden con el tipo \codigo{ERROR} y los campos \codigo{codigo} y
+\codigo{detalle}.
+
+\begin{minipage}[t]{0.47\textwidth}
+\begin{lstlisting}[title={Petición}]
+reservar
+idSolicitud=S-5f3a9c0d12e4b7a1
+idEstudiante=EST-1
+idFecha=F-1
+cupos=2
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.47\textwidth}
+\begin{lstlisting}[title={Respuesta}]
+OK
+idReserva=R-1
+cupos=2
+monto=0
+disponibles=298
+\end{lstlisting}
+\end{minipage}
+
+\subsection{Operaciones}
+
+\begin{table}[H]
+\centering
+\caption{Operaciones del sistema.}
+\label{tab:operaciones}
+\small
+\begin{tabularx}{\textwidth}{p{3.7cm}p{1.6cm}p{4.5cm}Y}
+\toprule
+Operación & Tipo & Operación en persistencia & Resultado \\
+\midrule
+\codigo{consultarEventosMes} & Síncrona & \codigo{listarFechasMes} &
+Fechas del mes con evento, lugar, precio, límite, reservas y cupos disponibles. \\
+\codigo{consultarReservas} & Síncrona & \codigo{listarReservasEstudiante} &
+Reservas del estudiante y su estado. \\
+\codigo{reservar} & Síncrona & \codigo{crearReserva} &
+Reserva creada (\codigo{idReserva}, cupos, monto, disponibles). \\
+\codigo{modificarReserva} & Síncrona & \codigo{modificarReserva} &
+Nueva cantidad de cupos y/o fecha; diferencia de precio. \\
+\codigo{cancelarReserva} & Asíncrona & \codigo{registrarCancelacion},
+\codigo{aplicarCancelacion} & Respuesta inmediata \codigo{EN\_PROCESO}; luego
+notificación \codigo{CONFIRMADA} o \codigo{FALLIDA}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Reglas de negocio.} El límite de cupos de un evento es la capacidad de su
+lugar (edificio o teatro registrado) o una capacidad definida a mano para lugares
+externos. Las reservas de una fecha nunca superan ese límite; un estudiante tiene
+como máximo una reserva activa por evento; las reservas y modificaciones se
+aplican completas o no se aplican. Los códigos de error son:
+
+\begin{itemize}\sloppy
+    \item \textbf{de negocio:} \codigo{CUPOS\_INSUFICIENTES}, \codigo{RESERVA\_DUPLICADA},
+          \codigo{FECHA\_NO\_EXISTE}, \codigo{ESTUDIANTE\_NO\_REGISTRADO},
+          \codigo{RESERVA\_AJENA}, \codigo{CANCELACION\_PENDIENTE},
+          \codigo{DATOS\_INVALIDOS};
+    \item \textbf{técnicos:} \codigo{PERSISTENCIA\_NO\_DISPONIBLE},
+          \codigo{SIN\_PROCESADORES}.
+\end{itemize}
+
+% =====================================================================
+\subsection{Diagrama de despliegue}
+\label{sec:despliegue}
+
+La arquitectura base se despliega en las cuatro máquinas del laboratorio. Cada
+máquina corre los ejecutables de una parte de la Figura~\ref{fig:arquitectura-basica};
+los enlaces indican el protocolo y los puertos.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{\input{diagramas/despliegue}}
+    \caption{Diagrama de despliegue de la arquitectura base.}
+    \label{fig:despliegue}
+\end{figure}
+
+% =====================================================================
+\subsection{Diagrama de componentes}
+
+Cada componente ofrece y requiere interfaces ZeroMQ. El símbolo de bola indica la
+interfaz que un componente provee y el de semicírculo la que otro requiere.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{!}{0.62\textheight}{\input{diagramas/componentes}}
+    \caption{Diagrama de componentes de la arquitectura base.}
+    \label{fig:componentes}
+\end{figure}
+
+% =====================================================================
+\subsection{Diagramas de clases}
+
+El sistema está escrito en C++17 orientado a objetos. La
+Figura~\ref{fig:clases-servicios} muestra las clases de los procesos y la
+Figura~\ref{fig:clases-dominio} el modelo de dominio que guarda persistencia.
+Las decisiones de diseño orientado a objetos más importantes son:
+
+\begin{itemize}
+    \item \textbf{Herencia y método plantilla:} \codigo{Servicio::ejecutar()} define el
+          ciclo de vida común (señales, \codigo{inicializar}, \codigo{iterar},
+          \codigo{finalizar}) y cada proceso implementa sus pasos.
+    \item \textbf{Polimorfismo:} \codigo{Lugar} es abstracta; \codigo{LugarUniversidad}
+          y \codigo{LugarExterno} calculan la capacidad de forma distinta y
+          \codigo{Evento} no necesita saber cuál tiene.
+    \item \textbf{Interfaz intercambiable:} \codigo{Almacenamiento} separa la lógica de
+          datos de cómo se guardan; hoy es un archivo de bitácora y luego podrá ser
+          PostgreSQL sin cambiar \codigo{BaseDatos}.
+    \item \textbf{Encapsulamiento:} las reglas de cupos viven en \codigo{FechaEvento}
+          y las de estado en \codigo{Reserva} y \codigo{SolicitudCancelacion}.
+    \item \textbf{Reutilización:} \codigo{ClienteConfiable} implementa el patrón
+          \emph{Lazy Pirate} una sola vez y lo usan el cliente y los procesos de negocio.
+\end{itemize}
+
+\begin{sidewaysfigure}
+    \centering
+    \resizebox{\linewidth}{!}{\input{diagramas/clases-servicios}}
+    \caption{Diagrama de clases de los procesos y la comunicación.}
+    \label{fig:clases-servicios}
+\end{sidewaysfigure}
+
+\begin{sidewaysfigure}
+    \centering
+    \resizebox{\linewidth}{!}{\input{diagramas/clases-dominio}}
+    \caption{Diagrama de clases del modelo de dominio.}
+    \label{fig:clases-dominio}
+\end{sidewaysfigure}
+\clearpage
+
+% =====================================================================
+\subsection{Diagramas de secuencia}
+
+\paragraph{Consultar los eventos de un mes.} El gestor entrega la petición a un
+procesador RMC libre, que valida el mes y pide a persistencia las fechas.
+
+\begin{figure}[H]
+    \centering
+    \secuenciaConsultar
+    \caption{Secuencia: consultar los eventos de un mes.}
+\end{figure}
+
+\paragraph{Reservar.} Persistencia revisa primero si el \codigo{idSolicitud} ya se
+procesó (reintento); si no, valida todo y aplica el cambio de forma atómica.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{\secuenciaReservar}
+    \caption{Secuencia: reservar cupos.}
+\end{figure}
+
+\paragraph{Modificar una reserva.} Igual que la reserva, pero libera los cupos de la
+fecha original y ocupa los de la fecha destino en una sola operación.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{\secuenciaModificar}
+    \caption{Secuencia: modificar una reserva.}
+\end{figure}
+
+\paragraph{Cancelar una reserva (asíncrona).} La solicitud se guarda como
+\codigo{PENDIENTE} \emph{antes} de responder; así, aunque el aviso PUB/SUB se
+pierda, el barrido periódico la encuentra y la aplica. El estudiante recibe de
+inmediato \codigo{EN\_PROCESO} y después la notificación con el resultado.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{\secuenciaCancelar}
+    \caption{Secuencia: cancelar una reserva (asíncrona).}
+\end{figure}

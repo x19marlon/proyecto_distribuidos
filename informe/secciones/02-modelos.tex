@@ -1,0 +1,311 @@
+\section{Modelos del sistema}
+\label{sec:modelos}
+
+Siguiendo a Coulouris et al.~\cite{coulouris}, el sistema se describe con cuatro
+modelos. Para cada uno se presentan los conceptos y cómo se aplican al proyecto.
+
+% =====================================================================
+\subsection{Modelo arquitectónico}
+
+El modelo arquitectónico define qué entidades forman el sistema, cómo se comunican,
+qué papel cumple cada una y dónde se ubican.
+
+\subsubsection{Estilo arquitectónico}
+
+\begin{table}[H]
+\centering
+\caption{Estilos arquitectónicos aplicados al proyecto.}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{3.6cm}Y}
+\toprule
+Concepto & Cómo se aplica \\
+\midrule
+Arquitectura por capas &
+Tres capas en orden estricto: \emph{Consumidores} $\rightarrow$ \emph{Servicios de
+Negocio} $\rightarrow$ \emph{Servicios de Almacenamiento}. Cada capa solo llama a la
+capa inmediatamente inferior, por lo que cada una puede desplegarse, reemplazarse y
+escalarse por separado. \\
+Cliente--servidor &
+Los clientes son clientes del \codigo{GestorTransacciones}; a su vez, los procesos
+de negocio son clientes del Servicio de Persistencia. \\
+Intermediario (broker) &
+El \codigo{GestorTransacciones} es el único punto de entrada: los clientes solo
+conocen su dirección y él reparte las peticiones entre los procesos de negocio. Los
+clientes quedan desacoplados de cuántos procesadores hay y dónde están. \\
+Servicios sin estado &
+Gestor, procesadores y servicio de cancelación no guardan datos de negocio en
+memoria; todo el estado vive en la capa de almacenamiento. Por eso pueden
+reiniciarse o replicarse sin perder información. \\
+Publicación--suscripción &
+Las cancelaciones se anuncian con ZeroMQ \codigo{PUB}/\codigo{SUB}: el gestor
+publica sin conocer a los suscriptores (desacoplamiento en el espacio) y la
+solicitud guardada permite aplicarla después (desacoplamiento en el tiempo). \\
+Fuente única de verdad &
+El Servicio de Persistencia es el único que decide los cupos, las reservas y las
+transacciones, lo que simplifica la consistencia. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Entidades y roles}
+
+Las entidades corresponden a las cajas de la Figura~\ref{fig:arquitectura-basica}.
+Cada una es un proceso independiente:
+
+\begin{table}[H]
+\centering
+\caption{Procesos del sistema.}
+\begin{tabularx}{\textwidth}{p{4.1cm}p{2.6cm}Y}
+\toprule
+Proceso & Capa & Responsabilidad \\
+\midrule
+\codigo{cliente} & Consumidores & Interfaz del estudiante: consultar eventos del mes,
+reservar, modificar y cancelar; recibe notificaciones de cancelación. \\
+\codigo{gestor-transacciones} & Servicios de Negocio & Recibe todas las solicitudes,
+envía las síncronas a un procesador RMC libre y publica las cancelaciones. \\
+\codigo{procesador-rmc} & Servicios de Negocio & Procesamiento de
+\textbf{R}eservas, \textbf{M}odificaciones y \textbf{C}onsultas: valida y ejecuta
+las operaciones síncronas contra persistencia. \\
+\codigo{cancelacion-reservas} & Servicios de Negocio & Aplica de forma asíncrona las
+cancelaciones aceptadas y notifica el resultado al estudiante. \\
+\codigo{persistencia} & Servicios de Almacenamiento & Guarda estudiantes, lugares,
+eventos, fechas, reservas y transacciones; aplica cada cambio de forma atómica. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Paradigmas de comunicación}
+
+Toda la comunicación entre procesos usa paso de mensajes con ZeroMQ~\cite{zguide}:
+
+\begin{itemize}
+    \item \textbf{Petición--respuesta} (\codigo{REQ}/\codigo{ROUTER}/\codigo{DEALER}/\codigo{REP})
+          para consultas, reservas y modificaciones, y para la aceptación de la
+          cancelación. Quien llama se bloquea hasta recibir la respuesta.
+    \item \textbf{Publicación--suscripción} (\codigo{PUB}/\codigo{SUB}) para anunciar
+          una cancelación aceptada al servicio de cancelación y para notificar el
+          resultado al estudiante. El publicador no espera.
+\end{itemize}
+
+\subsubsection{Ubicación física}
+
+En la arquitectura base cada proceso corre en una máquina del laboratorio
+(sección~\ref{sec:despliegue}): una máquina para los clientes, una para el
+gestor, una para los procesos de negocio y una para persistencia. Las direcciones y
+puertos se leen de variables de entorno, de modo que el mismo programa corre en una
+sola máquina (desarrollo) o repartido en varias (pruebas). En la segunda entrega el
+sistema se desplegará en Kubernetes sobre las mismas 4 máquinas
+(sección~\ref{sec:escalabilidad}).
+
+% =====================================================================
+\subsection{Modelo de interacción}
+
+El modelo de interacción trata el desempeño de los canales, la ausencia de un reloj
+global y el orden de los eventos.
+
+\subsubsection{Sistema asíncrono y cotas prácticas}
+
+En un \emph{sistema distribuido síncrono} existen cotas conocidas para el tiempo de
+ejecución de los procesos, el retardo de los mensajes y la deriva de los relojes;
+en uno \emph{asíncrono} no existen. La red del laboratorio no garantiza ninguna
+cota, así que el sistema corre sobre un modelo \textbf{asíncrono}. Que las
+operaciones sean ``síncronas'' se refiere al \emph{estilo de interacción} (el
+cliente espera la respuesta), no a tiempos garantizados.
+
+Para poder actuar, el sistema asume \textbf{cotas prácticas} mediante timeouts:
+\begin{itemize}
+    \item cliente $\rightarrow$ gestor: 1\,s por intento, hasta 3 intentos;
+    \item procesos de negocio $\rightarrow$ persistencia: 300\,ms por intento, hasta 3 intentos;
+    \item latidos (\emph{heartbeats}) entre gestor y procesadores cada 1\,s; tres
+          perdidos significan que el procesador está caído.
+\end{itemize}
+Cuando se vence un timeout el resultado se considera \textbf{desconocido}, no
+fallido: la operación pudo haberse aplicado. Por eso los reintentos deben ser
+idempotentes (sección~\ref{sec:semantica}).
+
+\subsubsection{Desempeño de los canales}
+
+\begin{itemize}
+    \item \textbf{Latencia:} ZeroMQ mantiene conexiones TCP persistentes entre
+          procesos, así que no se paga un establecimiento de conexión por petición.
+    \item \textbf{Ancho de banda:} los mensajes son pequeños (texto
+          \codigo{clave=valor}); la consulta de un mes devuelve pocas decenas de filas.
+    \item \textbf{Jitter:} se observa comparando el promedio con la desviación
+          estándar y el percentil 95 en las pruebas de la Tabla~1.
+\end{itemize}
+
+\subsubsection{Relojes y orden de los eventos}
+
+Cada máquina tiene su propio reloj y estos derivan. Por eso:
+\begin{itemize}
+    \item Las \textbf{duraciones} (tiempos de respuesta) se miden siempre con el reloj
+          monótono de una sola máquina: inicio y fin en el mismo proceso cliente.
+    \item El \textbf{orden de las operaciones} sobre los mismos datos lo decide el
+          Servicio de Persistencia, que atiende las peticiones una a una. Si dos
+          estudiantes compiten por el último cupo, gana el que persistencia procesa
+          primero, no el que tenga la marca de tiempo menor.
+    \item Las marcas de tiempo guardadas (instante de una transacción) las pone
+          siempre persistencia, así que son consistentes entre sí.
+    \item Cada operación lleva un \codigo{idSolicitud} único que permite seguirla a
+          través de los procesos en los registros.
+\end{itemize}
+
+\subsubsection{Semántica de invocación}
+\label{sec:semantica}
+
+\begin{table}[H]
+\centering
+\caption{Semántica de invocación por operación.}
+\begin{tabularx}{\textwidth}{p{4.2cm}p{2.6cm}Y}
+\toprule
+Operación & Estilo & Semántica \\
+\midrule
+Consultar eventos del mes & Síncrona & \emph{Al menos una vez}: los reintentos son
+inofensivos porque es de solo lectura. \\
+Reservar, modificar & Síncrona & \emph{Efectivamente exactamente una vez}: el
+cliente reintenta con el mismo \codigo{idSolicitud} y persistencia devuelve la
+respuesta guardada sin aplicar el cambio otra vez. \\
+Cancelar (aceptación) & Síncrona, corta & Exactamente una solicitud de cancelación
+guardada por \codigo{idSolicitud}. \\
+Cancelar (aplicación) & Asíncrona & Entrega \emph{al menos una vez} (aviso
+PUB/SUB + barrido periódico) y aplicación idempotente: la cancelación se aplica una
+sola vez. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =====================================================================
+\subsection{Modelo de fallos}
+
+El modelo de fallos define qué puede fallar, cómo falla y cómo el sistema lo detecta
+y lo enmascara.
+
+\subsubsection{Clases de fallos considerados}
+
+\begin{table}[H]
+\centering
+\caption{Clases de fallos.}
+\begin{tabularx}{\textwidth}{p{3.3cm}Y Y}
+\toprule
+Clase & Definición & Ejemplo en el proyecto \\
+\midrule
+Caída (\emph{fail-stop}) & El proceso se detiene y no hace nada más. &
+Se apaga la máquina del procesador RMC. \\
+Omisión de proceso & No envía o no recibe un mensaje. & El servicio de cancelación
+se cae justo después de recibir un aviso. \\
+Omisión de canal & El mensaje se pierde en la red. & Se pierde la respuesta de
+\codigo{reservar}; el cliente agota el timeout. \\
+Temporización & La respuesta llega, pero tarde. & Persistencia tarda más de 1\,s
+bajo carga. \\
+Arbitrario (bizantino) & Comportamiento incorrecto o malicioso. & Mensaje alterado
+o cliente que envía datos inválidos. Queda fuera del modelo de corrección y lo
+cubre en parte el modelo de seguridad. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Supuestos.} (1) Los procesos fallan por caída. (2) Los canales pueden
+perder, retrasar o duplicar mensajes, pero TCP detecta la corrupción. (3) Lo que
+persistencia confirma como guardado sobrevive a una caída; los mensajes de ZeroMQ,
+incluidos los de PUB/SUB, no son durables. (4) Desde afuera no se distingue una
+caída de un proceso lento: un timeout solo significa ``desconocido''.
+
+\subsubsection{Fallos por componente y cómo se enmascaran}
+
+\begin{longtable}{p{3.1cm}p{3.6cm}p{8.6cm}}
+\caption{Fallos por componente.}\\
+\toprule
+Componente & Fallo & Detección y manejo \\
+\midrule
+\endfirsthead
+\toprule
+Componente & Fallo & Detección y manejo \\
+\midrule
+\endhead
+Red cliente--gestor & Se pierde la petición o la respuesta & Timeout del cliente;
+reintento con el mismo \codigo{idSolicitud} (patrón \emph{Lazy Pirate}); no hay
+reservas duplicadas. \\
+Procesador RMC & Se cae con una petición en curso & El gestor deja de recibir sus
+latidos y lo descarta; el cliente reintenta y otro procesador atiende. \\
+Gestor de Transacciones & Se cae & Punto único de fallo en la arquitectura base; los
+clientes reintentan hasta que se reinicie. Al volver, los procesadores se
+registran de nuevo con su siguiente latido. En la segunda entrega se replica
+(\emph{Binary Star}). \\
+Servicio de cancelación & Se cae o pierde un aviso PUB/SUB & La solicitud ya quedó
+guardada como \codigo{PENDIENTE}; un barrido periódico la encuentra y la aplica. \\
+Persistencia & Se cae a mitad de una operación & Cada cambio es atómico (todo o
+nada) y se escribe en disco antes de responder; al reiniciar se reconstruye el
+estado. Los servicios responden \codigo{PERSISTENCIA\_NO\_DISPONIBLE}. \\
+Persistencia & Lenta & Los indicadores de latencia lo muestran (p95 > 1\,s). \\
+Relojes & Deriva entre máquinas & Las duraciones se miden en una sola máquina y el
+orden lo decide persistencia. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Puntos únicos de fallo de la arquitectura base}
+
+En la arquitectura base hay una sola instancia de cada componente, así que el
+gestor, el servicio de cancelación y persistencia son puntos únicos de fallo. La
+sección~\ref{sec:escalabilidad} presenta los componentes que los eliminan.
+
+% =====================================================================
+\subsection{Modelo de seguridad}
+
+El modelo de seguridad identifica qué se protege, de quién y con qué defensas. Se
+asume un \emph{enemigo} capaz de enviar cualquier mensaje a cualquier proceso y de
+leer, copiar, alterar o repetir los mensajes que viajan por la red.
+
+\subsubsection{Objetos a proteger}
+
+\begin{itemize}
+    \item \textbf{Datos personales del estudiante}: nombre, tipo y número de
+          documento, correo, teléfono, carrera, departamento y semestre. En Colombia
+          están protegidos por la Ley 1581 de 2012~\cite{ley1581}.
+    \item \textbf{Reservas y cupos}: recurso limitado que podría acapararse.
+    \item \textbf{Transacciones}: registro de auditoría de reservas, modificaciones y
+          cancelaciones, con sus montos.
+    \item \textbf{Eventos y lugares}: datos falsos engañarían a todos los estudiantes.
+\end{itemize}
+
+\subsubsection{Amenazas y defensas}
+
+\begin{longtable}{p{3.0cm}p{5.0cm}p{7.3cm}}
+\caption{Amenazas y defensas.}\\
+\toprule
+Amenaza & Ejemplo & Defensa \\
+\midrule
+\endfirsthead
+\toprule
+Amenaza & Ejemplo & Defensa \\
+\midrule
+\endhead
+Suplantación & Cancelar la reserva de otro estudiante. & Autenticación del
+estudiante (token de sesión) y verificación de propiedad: el
+\codigo{idEstudiante} sale del token, nunca del cuerpo del mensaje
+(\codigo{RESERVA\_AJENA}). Procesos internos autenticados con llaves CurveZMQ. \\
+Escucha & Leer números de documento en la red. & Cifrado de todos los sockets con
+CurveZMQ. \\
+Alteración & Cambiar \codigo{cupos=1} por \codigo{cupos=50}. & CurveZMQ (cifrado
+autenticado) y validación de rangos en el procesador RMC. \\
+Repetición & Reenviar una reserva capturada. & \codigo{idSolicitud} único: la
+repetición devuelve la respuesta guardada sin un segundo efecto. \\
+Denegación de servicio & Inundar \codigo{reservar}. & Límite de solicitudes por
+estudiante, colas acotadas de ZeroMQ (\emph{high-water marks}). \\
+Elevación de privilegios & Un estudiante crea o borra eventos. & Autorización por
+rol en la capa de negocio. \\
+Fuga de datos & Documentos en los registros. & Los registros solo llevan
+\codigo{idSolicitud} e \codigo{idEstudiante}; el documento se muestra enmascarado. \\
+Repudio & ``Yo nunca cancelé''. & Toda operación queda como \codigo{Transaccion}
+inmutable con estudiante, solicitud e instante. \\
+Aislamiento & Conectarse directo a persistencia. & Solo el gestor es accesible desde
+fuera; persistencia solo acepta conexiones de los procesos de negocio
+(firewall o \emph{NetworkPolicy} en Kubernetes). \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Seguridad frente a desempeño}
+
+El cifrado agrega costo a cada mensaje. Como ZeroMQ mantiene conexiones
+persistentes, el intercambio de llaves de CurveZMQ ocurre una sola vez por conexión
+y no en cada petición. El costo se medirá comparando corridas con y sin cifrado.
+En la primera entrega la autenticación y el cifrado no están implementados; se
+incorporarán con los componentes de la sección~\ref{sec:escalabilidad}.

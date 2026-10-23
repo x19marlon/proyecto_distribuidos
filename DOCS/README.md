@@ -20,6 +20,7 @@ Consumidores  ──►  Servicios  ──►  Persistencia de Datos
 
 | Documento | Contenido |
 |---|---|
+| [implementacion.md](implementacion.md) | **Lo implementado en la entrega 1** (C++ y ZeroMQ): consulta y reserva de eventos; procesos, mensajes, clases, tolerancia a fallos |
 | [requisitos.md](requisitos.md) | Requisitos funcionales y no funcionales |
 | [arquitectura.md](arquitectura.md) | Las tres capas, cómo se comunican, vista de despliegue |
 | [comunicacion-zeromq.md](comunicacion-zeromq.md) | Patrones ZeroMQ (REQ/ROUTER/DEALER, PUB/SUB), patrones de confiabilidad, formato de mensajes, CurveZMQ |

@@ -1,0 +1,82 @@
+\section{Introducción}
+
+\subsection{Contexto}
+
+La universidad organiza cada semestre una gran cantidad de eventos abiertos a sus
+estudiantes: conciertos, talleres, conferencias, ferias y actividades culturales.
+Algunos se realizan en edificios o teatros del campus, cuya capacidad es conocida,
+y otros en lugares externos. Un mismo evento puede repetirse en varias fechas, y
+algunos son gratuitos mientras que otros tienen un costo por cupo.
+
+Hoy la inscripción a estos eventos suele hacerse con formularios independientes,
+hojas de cálculo o directamente en la entrada del evento. Esto hace difícil saber
+cuántos cupos quedan, permite que se inscriban más personas que la capacidad del
+lugar y no deja un registro confiable de quién reservó, modificó o canceló.
+
+En el curso de Sistemas Distribuidos se propone construir un \textbf{sistema
+distribuido de transacciones} que resuelva este problema y que, al mismo tiempo,
+permita estudiar en la práctica los conceptos del curso: arquitecturas por capas,
+comunicación por paso de mensajes, modelos de interacción, de fallos y de
+seguridad, tolerancia a fallos, escalabilidad y evaluación de desempeño.
+
+\subsection{Problema}
+
+Se necesita un sistema al que muchos estudiantes accedan al mismo tiempo desde
+distintas máquinas para:
+
+\begin{itemize}
+    \item consultar los eventos programados en un mes y los cupos disponibles de cada fecha;
+    \item reservar uno o más cupos en una fecha de un evento;
+    \item modificar una reserva (cantidad de cupos o fecha), y
+    \item cancelar una reserva.
+\end{itemize}
+
+Las consultas, reservas y modificaciones deben responder de forma \textbf{síncrona}:
+el estudiante espera y recibe el resultado definitivo en la misma operación. La
+cancelación es \textbf{asíncrona}: el sistema la acepta de inmediato, informa que
+está en proceso y la aplica después en la capa de datos.
+
+El problema es distribuido por naturaleza: los clientes, los servicios de negocio y
+el almacenamiento corren en procesos y máquinas distintas que se comunican por la
+red. Esto introduce dificultades que no existen en un programa centralizado:
+\begin{itemize}
+    \item \textbf{Concurrencia:} dos estudiantes pueden pedir el último cupo al mismo
+          tiempo y el sistema nunca debe superar la capacidad de una fecha.
+    \item \textbf{Fallos parciales:} un proceso puede caerse o un mensaje perderse; un
+          reintento no debe reservar ni cobrar dos veces, y una cancelación aceptada no
+          debe perderse.
+    \item \textbf{Desempeño:} cada transacción debe completarse en menos de un segundo,
+          y el desempeño debe medirse y compararse entre una arquitectura base y una
+          escalable (Tabla~1 del enunciado).
+    \item \textbf{Seguridad:} se manejan datos personales de los estudiantes y dinero.
+\end{itemize}
+
+\subsection{Objetivos}
+
+\paragraph{Objetivo general.} Diseñar, implementar y evaluar un sistema distribuido
+de tres capas (consumidores, servicios de negocio y almacenamiento), comunicado con
+ZeroMQ, que gestione las reservas de eventos universitarios de forma consistente,
+tolerante a fallos y con tiempos de respuesta menores a un segundo.
+
+\paragraph{Objetivos específicos.}
+\begin{enumerate}
+    \item Describir el sistema con los modelos arquitectónico, de interacción, de
+          fallos y de seguridad, y mostrar cómo cada uno condiciona el diseño.
+    \item Diseñar la arquitectura base de la Figura~\ref{fig:arquitectura-basica} con
+          diagramas UML de despliegue, componentes, clases y secuencia.
+    \item Implementar en C++ orientado a objetos los componentes de la arquitectura
+          base con las operaciones de consulta y reserva.
+    \item Identificar y justificar los componentes que harán la arquitectura escalable
+          y tolerante a fallos en la segunda entrega.
+    \item Definir el protocolo de pruebas del sistema, las herramientas para obtener
+          las métricas de desempeño de la Tabla~1 y el método de generación de carga.
+\end{enumerate}
+
+\subsection{Alcance de esta entrega}
+
+Este documento corresponde a la \textbf{primera entrega}. Contiene los modelos del
+sistema, el diseño completo de la arquitectura base (incluidas la modificación y
+la cancelación asíncrona), la justificación de los componentes de escalabilidad y
+tolerancia a fallos, el protocolo de pruebas y la estrategia de medición. La
+implementación entregada cubre las operaciones de \textbf{consulta y reserva}
+sobre los componentes de la arquitectura base (sección~\ref{sec:implementacion}).

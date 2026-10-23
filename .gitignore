@@ -1,0 +1,11 @@
+build/
+bin/
+datos/
+logs/
+informe/*.aux
+informe/*.log
+informe/*.out
+informe/*.toc
+informe/*.lof
+informe/*.lot
+informe/*.pdf
